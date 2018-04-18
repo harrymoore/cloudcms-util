@@ -333,7 +333,8 @@ function getRelated(list, context, callback) {
 
     context.relatedIds = relatedIds || [];
     if (!context.relatedIds.length) {
-        callback(null, context);    
+        callback(null, context);
+        return;
     }
 
     var query = {
