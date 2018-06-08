@@ -37,6 +37,7 @@ var option_gitanaFilePath = options["gitana-file-path"] || "./gitana.json";
 var option_branchId = options["branch"] || "master";
 var option_listTypes = options["list-types"];
 var option_definitionQNames = options["definition-qname"]; // array
+var option_allDefinitions = options["all-definitions"] || false;
 var option_includeInstances = options["include-instances"] || false;
 var option_includeRelated = options["include-related"] || false;
 var option_dataFolderPath = options["folder-path"] || "./data";
@@ -69,7 +70,7 @@ if (option_listTypes) {
 } else if (option_queryFilePath) {
     // download and store data from project/branch to a local folder
     handleQueryBasedExport();
-} else if (option_definitionQNames && Gitana.isArray(option_definitionQNames)) {
+} else if (option_allDefinitions || (option_definitionQNames && Gitana.isArray(option_definitionQNames))) {
     // download and store data from project/branch to a local folder
     handleExport();
 } else {
@@ -137,11 +138,12 @@ function handleExport() {
             return;
         }
 
-        log.info("connected to project: \" " + project.title + " \" and branch: " + branch.title || branch._doc);
+        log.info("connected to project: \"" + project.title + "\" and branch: \"" + (branch.title || branch._doc) + "\"");
         
         var context = {
             branchId: option_branchId,
             branch: branch,
+            allDefinitions: option_allDefinitions,
             importTypeQNames: option_definitionQNames,
             gitanaConfig: gitanaConfig,
             platform: platform,
@@ -288,7 +290,7 @@ function writeContentInstanceJSONtoDisk(nodes, pathPart, context, callback) {
     }
 
     for(var i = 0; i < nodes.length; i++) {
-        var node = cleanNode(nodes[i], "x");
+        var node = cleanNode(nodes[i], "");
         var filePath = path.normalize(path.posix.resolve(context.dataFolderPath, pathPart, node._type.replace(':', '__SC__'), node._doc || node._source_doc, "node.json"));        
         writeJsonFile.sync(filePath, node);
     }
@@ -296,7 +298,7 @@ function writeContentInstanceJSONtoDisk(nodes, pathPart, context, callback) {
     // write related nodes
     var relatedNodes = context.relatedNodes;
     _.map(relatedNodes, function(v, k){
-        var node = cleanNode(v, "x");
+        var node = cleanNode(v, "");
         writeJsonFile.sync(buildRelatedPath(dataFolderPath, node), node);
     });
 
@@ -404,7 +406,8 @@ function getDefinitionInstances(context, typeDefinitionNode, callback) {
         util.enhanceNode(instance);
         context.instanceNodes[typeDefinitionNode._qname].push(instance);
     }).then(function() {
-        log.debug("instances: " + JSON.stringify(context.instanceNodes, null, 2));
+        // log.debug("instances: " + JSON.stringify(context.instanceNodes, null, 2));
+        log.debug("instances count: " + context.instanceNodes.length);
         callback(null, context);
     });
 }
@@ -655,7 +658,8 @@ function getOptions() {
         {name: 'gitana-file-path', alias: 'g', type: String, description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json'},
         {name: 'branch', alias: 'b', type: String, description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"'},
         {name: 'list-types', alias: 'l', type: Boolean, description: 'list type definitions available in the branch'},
-        {name: 'definition-qname', alias: 'q', type: String, multiple: true, description: '_qname of the type definition'},
+        {name: 'definition-qname', alias: 'q', type: String, multiple: true, description: '_qname of the type definition. Or use --all-definitions'},
+        {name: 'all-definitions', alias: 'a', type: Boolean, description: 'export all definitions. Or use --definition-qname'},
         {name: 'include-instances', alias: 'i', type: Boolean, description: 'include instance records for conent type definitions'},
         {name: 'include-related', alias: 'r', type: Boolean, description: 'include instance records referred to in relators on instance records'},
         {name: 'folder-path', alias: 'f', type: String, description: 'folder to store exported files. defaults to ./data'},
@@ -702,7 +706,13 @@ function printHelp(optionsList) {
                     desc: 'node cloudcms-export.js --definition-qname "my:type1" "my:type2" --include-instances --folder-path ./data'
                 },
                 {
-                    desc: '3. export a list of nodes based on a user defined query:',
+                    desc: '3. export all definition nodes:',
+                },
+                {
+                    desc: 'node cloudcms-export.js --all-definitions --include-instances --folder-path ./data'
+                },
+                {
+                    desc: '4. export a list of nodes based on a user defined query:',
                 },
                 {
                     desc: 'node cloudcms-export.js -y ./myquery.json --folder-path ./data'
