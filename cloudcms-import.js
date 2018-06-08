@@ -17,6 +17,7 @@ const log = new Logger({
 	showMillis: false,
 	showTimestamp: true
 });
+const QUERY_BATCH_SIZE = 250;
 
 //set OS-dependent path resolve function 
 const isWindows = /^win/.test(process.platform);
@@ -41,6 +42,7 @@ var option_gitanaFilePath = options["gitana-file-path"] || "./gitana.json";
 var option_branchId = options["branch"] || "master";
 var option_listTypes = options["list-types"];
 var option_definitionQNames = options["definition-qname"]; // array
+var option_allDefinitions = options["all-definitions"] || false;
 var option_includeInstances = options["include-instances"] || false;
 var option_overwriteExistingInstances = options["overwrite-instances"] || false;
 var option_dataFolderPath = options["folder-path"] || "./data";
@@ -66,15 +68,13 @@ if (option_useCredentialsFile) {
 } // else don't override credentials
 
 // if listing types
-if (option_listTypes)
-{
+if (option_listTypes) {
     // print a list of definition qnames on the project/branch
     handleListTypes();
 } else if (option_nodes) {
     // download and store data from project/branch to a local folder
     handleNodeImport();
-} else if (option_definitionQNames && Gitana.isArray(option_definitionQNames))
-{
+} else if (option_allDefinitions || (option_definitionQNames && Gitana.isArray(option_definitionQNames))) {
     // download and store data from project/branch to a local folder
     handleImport();
 } else {
@@ -118,7 +118,7 @@ function handleNodeImport() {
             async.ensureAsync(async.apply(loadNodesFromDisk, context)),
             async.ensureAsync(loadRelatedNodesFromDisk),
             async.ensureAsync(readExistingNodesFromBranch),
-            async.ensureAsync(readExistingRelatedNodesFromBranch),
+            async.ensureAsync(readExistingRelatedNodesFromBranchBatch),
             async.ensureAsync(readExistingRelatedNodesFromBranchByPath),
             async.ensureAsync(async.apply(writeRelatedNodesToBranch, context.relatedNodes)),
             async.ensureAsync(resolveRelated),
@@ -154,7 +154,8 @@ function handleImport() {
         var context = {
             branchId: option_branchId,
             branch: branch,
-            importTypeQNames: option_definitionQNames,
+            allDefinitions: option_allDefinitions,
+            importTypeQNames: option_definitionQNames || [],
             typeDefinitions: [],
             dataFolderPath: option_dataFolderPath,
             includeInstances: option_includeInstances,
@@ -167,7 +168,8 @@ function handleImport() {
         };
 
         async.waterfall([
-            async.apply(getDefinitions, context),
+            async.apply(loadAllDefinitionsFromDisk, context),
+            async.ensureAsync(getDefinitions),
             async.ensureAsync(writeDefinitionsToBranch),
             async.ensureAsync(getDefinitionFormAssociations),
             async.ensureAsync(writeFormsToBranch),
@@ -191,7 +193,7 @@ function handleImport() {
 }
 
 function resolveRelated(context, callback) {
-    log.debug("resolveRelated()");
+    log.info("resolveRelated()");
 
     var nodes = context.nodes;
     
@@ -247,13 +249,12 @@ function resolveNodeRefs(context, node) {
     }
 }
 
-//
 // query for existing nodes by either _filePath, type & title, or _qname
 function readExistingNodesFromBranch(context, callback) {
-    log.debug("readExistingNodesFromBranch()");
+    log.info("readExistingNodesFromBranch()");
 
     async.eachSeries(context.nodes, function(node, callback){
-        log.debug("query for existing node by _doc: " + node._source_doc);
+        log.debug("query for existing node. _doc: " + node._source_doc + " _type:" + node._type + " title:\"" + node.title + "\"");
         
         if (!node) {
             callback();
@@ -261,6 +262,7 @@ function readExistingNodesFromBranch(context, callback) {
         }
 
         if (node._filePath) {
+            log.debug("query for existing node by _filePath: " + node._filePath);
             context.branch.trap(function(){
                 // not found
                 log.debug("node not found for path: " + node._filePath);
@@ -275,14 +277,17 @@ function readExistingNodesFromBranch(context, callback) {
                 return;
             });
         } else if (node.title) {
+            log.debug("query for existing node by type: " + node._type + " and title:\"" + node.title + "\"");
             context.branch.trap(function(err){
-                log.debug("error looking for existing node: " + node.title);
-                log.err("err: " + err);
+                log.debug("error looking for existing node: " + node._type + " and title:\"" + node.title + "\"");
+                log.error("err: " + err);
                 //     // callback();
             //     // return;
-            })
-            .queryNodes({
-                title: node.title,
+            }).queryNodes({
+                title: { 
+                    "$regex": "^" + node.title.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
+                    "$options": "i"
+                },
                 _type: node._type
             }).then(function() {
                 if (this.size() === 0) {
@@ -302,6 +307,7 @@ function readExistingNodesFromBranch(context, callback) {
                 });                        
             });
         } else {
+            log.debug("query for existing node by _qname: " + node._qname);
             context.branch.trap(function(){
                 // not found
                 log.debug("node not found for _qname: " + node._qname);
@@ -330,7 +336,7 @@ function readExistingNodesFromBranch(context, callback) {
 }
 
 function readExistingRelatedNodesFromBranchByPath(context, callback) {
-    log.debug("readExistingRelatedNodesFromBranchByPath()");
+    log.info("readExistingRelatedNodesFromBranchByPath()");
 
     var relatedNodes = context.relatedNodes;
     var existingNodes = context.existingNodes;
@@ -372,7 +378,7 @@ function readExistingRelatedNodesFromBranchByPath(context, callback) {
 }
 
 function readExistingNodesFromBranchByQName(context, callback) {
-    log.debug("readExistingNodesFromBranchByQName()");
+    log.info("readExistingNodesFromBranchByQName()");
 
     var qnames = _.map(context.nodes, function(node) {
         return node._qname;
@@ -395,6 +401,121 @@ function readExistingNodesFromBranchByQName(context, callback) {
     ).then(function() {
         // var nodes = this.asArray();
         // context.existingNodes = nodes;
+        callback(null, context);
+    });
+}
+
+function readExistingRelatedNodesFromBranchBatch(context, callback) {
+    log.info("readExistingRelatedNodesFromBranchBatch()");
+
+    if (!context.includeRelated) {
+        callback(null, context);
+        return;
+    }
+
+    context.relatedRefs = util.findKeyLocations(context.nodes, "ref", []);
+    var relatedRefs = context.relatedRefs;
+
+    if (!relatedRefs || relatedRefs.length === 0) {
+        callback(null, context);
+        return;
+    }
+
+    var queryCount = 0;
+    async.whilst(function(){
+        return queryCount < relatedRefs.length;
+    },
+    async.apply(function(context, callback){
+        log.debug("query for batch of existing related _type and title: " + queryCount + " to " + (queryCount+QUERY_BATCH_SIZE-1));
+        var nodesToQuery = relatedRefs.slice(queryCount, queryCount += QUERY_BATCH_SIZE);
+    
+        nodesToQuery = _.filter(nodesToQuery, function(ref) {
+            return (
+                ref.typeQName && ref.title && ref.qname || 
+                ref.typeQName && ref.title || 
+                ref.typeQName && ref.qname || 
+                ref.qname
+            );
+        });
+
+        var relatedQuery = _.map(nodesToQuery, function(ref) {
+            var q = null;
+
+            if (ref.typeQName && ref.title && ref.qname) {
+                q = {
+                    "$or": [
+                        {
+                            _type: ref.typeQName,
+                            title: { 
+                                "$regex": "^" + ref.title.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
+                                "$options": "i"
+                            }                    
+                        },
+                        {
+                            _qname: ref.qname
+                        }
+                    ]
+                };
+            } else if (ref.typeQName && ref.title) {
+                q = {
+                    _type: ref.typeQName,
+                    title: { 
+                        "$regex": "^" + ref.title.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
+                        "$options": "i"
+                    }
+                };
+            } else if (ref.typeQName && ref.qname) {
+                q = {
+                    "$or": [
+                        {
+                            _type: ref.typeQName,
+                        },
+                        {
+                            _qname: ref.qname
+                        }
+                    ]
+                };
+            } else if (ref.qname) {
+                q = {
+                    _qname: ref.qname
+                };
+            } else {
+                log.warn("Shouldn't get here. Must be bad data. " + JSON.stringify(ref,null,2));
+            }
+
+            return q;
+        });
+
+        if (!relatedQuery || !relatedQuery.length) {
+            callback(null, context);
+            return;
+        }
+
+        var query = {
+            "$or": relatedQuery
+        };
+
+        context.branch.queryNodes(query,{
+            limit: -1,
+            paths: true
+        }).then(function() {
+            var nodes = this.asArray();
+            nodes = _.map(nodes, function(node) {
+                util.enhanceNode(node);
+                context.existingNodes[node._qname] = node;
+                context.existingNodes[node._type + "_" + (node.title || "").toLowerCase()] = node;
+                if (node._filePath) {
+                    context.existingNodes[node._filePath] = node;
+                }
+                return node;
+            });
+
+            // context.existingRelatedNodes.concat(nodes);
+                
+            callback(null, context);
+        });
+    }, context),
+    function(err, context) {
         callback(null, context);
     });
 }
@@ -493,10 +614,90 @@ function readExistingContentInstancesFromBranch(context, callback) {
         context.instanceExistingNodes[instance._qname] = instance;
     }).then(function() {
         var instanceNodes = this.asArray();
-        log.debug("instances: " + JSON.stringify(instanceNodes, null, 2));
+        // log.debug("instances: " + JSON.stringify(instanceNodes, null, 2));
+        log.debug("instances count: " + instanceNodes.length);
         callback(null, context);
     });
 
+}
+
+function loadAllDefinitionsFromDisk(context, callback) {
+    log.debug("loadAllDefinitionsFromDisk()");
+
+    // we only need to continue if we are loading all available definitions
+    if (!context.allDefinitions) {
+        return callback(null, context);
+    }
+
+    var arr = {};
+    var definitionsPath = path.normalize(pathResolve(context.dataFolderPath, "definitions"));
+    var files = util.findFiles(definitionsPath, "node.json");
+    if (files && Gitana.isArray(files)) {
+        for(var i = 0; i < files.length; i++) {
+            var jsonNode = loadJsonFile.sync(files[i]);
+            arr[jsonNode._qname] = jsonNode;
+        }
+
+        log.info ("Resolve Dependency Order");
+        var dependencyOrderedTypeDefinitions = [];
+        var arrKeys = Object.keys(arr);
+        var keys = {};
+        for(i = 0; i < arrKeys.length; i++) {
+            var node = arr[arrKeys[i]];
+            _resolveDependencyOrder(node, arr, arrKeys, dependencyOrderedTypeDefinitions, keys);
+        }
+
+        context.importTypeQNames = dependencyOrderedTypeDefinitions;
+    }
+
+    return callback(null, context);
+}
+
+function _resolveDependencyOrder(typeDefinion, arr, arrKeys, resolved, resolvedKeys) {
+    var dependencies = _dependsOn(typeDefinion);
+    for(var i = 0; i < dependencies.length; i++) {
+        var node = arr[dependencies[i]];
+        if (!node) {
+            log.warn("_resolveDependencyOrder() dependency node for definition:" + typeDefinion._qname + " not found for _qname: " + dependencies[i]);
+            continue;
+        }
+        if (!node._qname) {
+            log.warn("_resolveDependencyOrder() node has no _qname: " + JSON.stringify(node,null,2));
+            continue;
+        }
+        if (!resolvedKeys[node._qname]) {
+            _resolveDependencyOrder(node, arr, arrKeys, resolved, resolvedKeys);
+        }
+    }
+
+    if (!resolvedKeys[typeDefinion._qname]) {
+        resolvedKeys[typeDefinion._qname] = 1;
+        resolved.push(typeDefinion._qname);
+    }
+
+    // print node.name
+    // for edge in node.edges:
+    //        if edge not in resolved:
+    //               dep_resolve(edge, resolved)
+    // resolved.append(node) 
+}
+
+function _dependsOn(node) {
+    var dependencies = {};
+    if (node._parent && node._parent !== "n:node" && node._parent !== "a:linked") {
+        dependencies[node._parent] = 1;
+    }
+    var relators = util.findKeyValues(node, "_relator", []);
+    for(var i = 0; i < relators.length; i++) {
+        if (relators[i].nodeType && node._qname !== relators[i].nodeType && "n:node" !== relators[i].nodeType) {
+            dependencies[relators[i].nodeType] = 1;
+        }
+        if (relators[i].associationType && node._qname !== relators[i].associationType && "a:linked" !== relators[i].associationType) {
+            dependencies[relators[i].associationType] = 1;
+        }
+    }
+    // return Object.keys(dependencies);
+    return Object.keys(dependencies);
 }
 
 //
@@ -530,7 +731,7 @@ function loadContentInstancesFromDisk(context, callback) {
 }
 
 function loadNodesFromDisk(context, callback) {
-    log.debug("loadNodesFromDisk()");
+    log.info("loadNodesFromDisk()");
 
     // find and load json
     var nodesPath = path.normalize(pathResolve(context.dataFolderPath, "nodes"));
@@ -560,7 +761,7 @@ function loadNodesFromDisk(context, callback) {
 }
 
 function loadRelatedNodesFromDisk(context, callback) {
-    log.debug("loadRelatedNodesFromDisk()");
+    log.info("loadRelatedNodesFromDisk()");
 
     if (!context.includeRelated) {
         callback(null, context);
@@ -595,7 +796,7 @@ function loadRelatedNodesFromDisk(context, callback) {
 }
 
 function writeNodeAttachmentsToBranch(context, callback) {
-    log.debug("writeNodeAttachmentsToBranch()");
+    log.info("writeNodeAttachmentsToBranch()");
 
     var nodes = context.nodes || [];
     if (!nodes) {
@@ -633,6 +834,10 @@ function writeAttachmentsToBranch(context, callback) {
 
     var nodes = context.instanceNodes.concat(context.relatedNodes);
 
+    if (!nodes || nodes.length == 0) {
+        return callback(null, context);
+    }
+
     async.each(nodes, function(node, callback){
         async.each(Object.keys(node.attachments || {}), function(attachment, callback){
             log.debug("adding attachment " + attachment.attachmentId + " to " + node._doc || node._source_doc);
@@ -654,31 +859,8 @@ function writeAttachmentsToBranch(context, callback) {
     });
 }
 
-// function writeRelatedNodesToBranch(context, callback) {
-//     log.debug("writeRelatedNodesToBranch()");
-
-//     if (!context.includeRelated) {
-//         log.info("Skipping related nodes");
-//         callback(null, context);
-//         return;
-//     }
-        
-//     async.eachSeries(nodes, async.apply(writeNodeToBranch, context), function (err) {
-//         if(err)
-//         {
-//             log.error("Error: " + err);
-//             callback(err);
-//             return;
-//         }
-        
-//         log.debug("loaded nodes");
-//         callback(null, context);
-//         return;
-//     });        
-// }
-
 function writeRelatedNodesToBranch(nodes, context, callback) {
-    log.debug("writeRelatedNodesToBranch()");
+    log.info("writeRelatedNodesToBranch()");
 
     if (!context.includeRelated) {
         log.info("Skipping related nodes");
@@ -690,7 +872,7 @@ function writeRelatedNodesToBranch(nodes, context, callback) {
 }
 
 function writeNodesToBranch(nodes, context, callback) {
-    log.debug("writeNodesToBranch()");
+    log.info("writeNodesToBranch()");
     
     async.eachSeries(nodes, async.apply(writeNodeToBranch, context), function (err) {
         if(err)
@@ -707,15 +889,17 @@ function writeNodesToBranch(nodes, context, callback) {
 }
 
 function writeNodeToBranch(context, node, callback) {
-    log.debug("writeNodeToBranch()");
+    log.info("writeNodeToBranch()");
 
     var existingNode = context.existingNodes[node._qname]; // look for existing node by qname first
     if (!existingNode && node._filePath) { // by path next
         existingNode = context.existingNodes[node._filePath];
      }
      if (!existingNode) { // finally by type and title
-        existingNode = context.existingNodes[node._type + "_" + node.title.toLowerCase() || ""];
-     }
+        //if node doesn't have title
+        let sumup =  node.title != null?  node.title.toLowerCase() : "";
+        existingNode = context.existingNodes[node._type + "_" + sumup || ""];
+      }
 
      if (existingNode) {
         // update unless instructed not to
@@ -755,9 +939,10 @@ function writeNodeToBranch(context, node, callback) {
         // create
         context.branch.trap(function(err){
             if (err) {
-                log.error("createNode() error: " + err, context);
+                log.warn("createNode() failed to create node: " + err + "\n" + JSON.stringify(node,null,2), context);
             }
-            return callback("createNode() " + err, context);
+            // continue anyway so we get a list of failed nodes
+            return callback(null, context);
         }).createNode(node).then(function(){ 
             thisNode = this;
             log.info("Created node " + thisNode._doc);
@@ -775,7 +960,7 @@ function writeNodeToBranch(context, node, callback) {
 }
 
 function writeInstanceNodesToBranch(context, callback) {
-    log.debug("writeInstanceNodesToBranch()");
+    log.info("writeInstanceNodesToBranch()");
     
     async.eachSeries(context.instanceNodes, async.apply(writeInstanceNodeToBranch, context), function (err) {
         if(err)
@@ -792,7 +977,7 @@ function writeInstanceNodesToBranch(context, callback) {
 }
 
 function writeInstanceNodeToBranch(context, instanceNode, callback) {
-    log.debug("writeInstanceNodeToBranch()");
+    log.info("writeInstanceNodeToBranch()");
 
     var existingNode = context.instanceExistingNodes[instanceNode._qname];
     if (existingNode) {
@@ -832,7 +1017,7 @@ function writeInstanceNodeToBranch(context, instanceNode, callback) {
 }
 
 function writeFormsToBranch(context, callback) {
-    log.debug("writeFormsToBranch()");
+    log.info("writeFormsToBranch()");
 
     var finalDefinitionNodes = context.finalDefinitionNodes;
     
@@ -1096,7 +1281,8 @@ function getDefinitionInstances(context, typeDefinitionNode, callback) {
         util.enhanceNode(instance);
         context.instanceNodes[typeDefinitionNode._qname].push(instance);
     }).then(function() {
-        log.debug("instances: " + JSON.stringify(context.instanceNodes, null, 2));
+        // log.debug("instances: " + JSON.stringify(context.instanceNodes, null, 2));
+        log.debug("instances count: " + context.instanceNodes.length);
         callback(null, context);
     });
 }
@@ -1224,7 +1410,8 @@ function getDefinitions(context, callback) {
         util.enhanceNode(definition);
         context.typeDefinitions.push(definition);
     }).then(function() {
-        log.debug("definitions: " + JSON.stringify(context.typeDefinitions, null, 2));
+        // log.debug("definitions: " + JSON.stringify(context.typeDefinitions, null, 2));
+        log.debug("definitions count: " + context.typeDefinitions.length);
         callback(null, context);
     });
 }
@@ -1237,7 +1424,8 @@ function readDefinition(context, callback) {
         util.enhanceNode(definition);
         context.typeDefinitions.push(definition);
     }).then(function() {
-        log.debug("definitions: " + JSON.stringify(context.typeDefinitions, null, 2));
+        // log.debug("definitions: " + JSON.stringify(context.typeDefinitions, null, 2));
+        log.debug("definitions count: " + context.typeDefinitions.length);
         callback(null, context);
     });
 }
@@ -1326,6 +1514,7 @@ function getOptions() {
         {name: 'branch', alias: 'b', type: String, description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"'},
         {name: 'list-types', alias: 'l', type: Boolean, description: 'list type definitions available in the branch'},
         {name: 'definition-qname', alias: 'q', type: String, multiple: true, description: '_qname of the type definition'},
+        {name: 'all-definitions', alias: 'a', type: Boolean, description: 'import all locally defined definitions. Or use --definition-qname'},
         {name: 'include-instances', alias: 'i', type: Boolean, description: 'include instance records for content type definitions'},
         {name: 'nodes', alias: 'n', type: Boolean, description: 'instead of importing definitions, import nodes in the nodes folder (and, optionally, their related nodes)'},        
         {name: 'include-related', alias: 'r', type: Boolean, description: 'include instance records referred to in relators on instance records'},        
