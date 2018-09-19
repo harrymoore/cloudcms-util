@@ -241,7 +241,7 @@ function downloadNodeAttachments(context, pathPart, node, callback) {
             return;
         }
         
-        log.debug("loaded node attachments");
+        log.debug("downloaded node attachments");
         callback(null, context);
         return;
     });        

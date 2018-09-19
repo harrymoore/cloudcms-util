@@ -27,7 +27,8 @@ const pathResolve = isWindows ? path.resolve : path.posix.resolve;
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 var options = handleOptions();
-if (!options) {
+if (!options || options.length === 0) {
+    printHelp(getOptions());
     return;
 }
 if (options["verbose"]) {
@@ -1089,32 +1090,31 @@ function writeFormNodeToBranch(context, definitionNode, formNode, callback) {
         }
     }
 
+    // make sure _type is n:form
+    if (!formNode._type || formNode._type !== "n:form") {
+        log.warn("Form type incorrect or not set for definiton " + definitionNode._qname + " form key " + thisFormKey + ". Setting to n:form");
+        formNode._type = "n:form";
+    }
+
     if (existingFormNodeId) {
-        context.branch.queryNodes({_qname: formNode._qname}).trap(function(err){
+        context.branch.readNode(existingFormNodeId).trap(function(err){
             if (err) {
                 return callback("writeFormNodeToBranch() could not load existing form node: " + thisFormKey + " _qname:" + formNode._qname + " " + err, context);
             }
         }).then(function() {
-            if (this.size() === 0) {
+            var thisNode = this;      
+            log.debug("writeFormNodeToBranch update existing form node: " + existingFormNodeId);
+
+            util.updateDocumentProperties(thisNode, formNode);
+            thisNode.update().trap(function(err){
+                callback("writeDefinition() " + err, context);
+                return;
+            }).then(function(){      
+                var newNode = this;      
+                log.info("Updated form node " + newNode._doc + " " + thisFormKey);
                 callback(null, context);
                 return;
-            }
-
-            this.keepOne().then(function() {
-                var thisNode = this;      
-                log.debug("writeFormNodeToBranch update existing form node: " + existingFormNodeId);
-
-                util.updateDocumentProperties(thisNode, formNode);
-                thisNode.update().trap(function(err){
-                    callback("writeDefinition() " + err, context);
-                    return;
-                }).then(function(){      
-                    var newNode = this;      
-                    log.info("Updated form node " + newNode._doc + " " + thisFormKey);
-                    callback(null, context);
-                    return;
-                });        
-            });
+            });        
         });
     }
     else
