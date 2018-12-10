@@ -17,6 +17,7 @@ const log = new Logger({
 	showMillis: false,
 	showTimestamp: true
 });
+const SC_SEPARATOR = "__SC__";
 
 // debug only when using charles proxy ssl proxy when intercepting cloudcms api calls:
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -105,7 +106,8 @@ function handleQueryBasedExport() {
             query: require(option_queryFilePath),
             nodes: [],
             relatedIds: [],
-            relatedNodes: []
+            relatedNodes: [],
+            queryPageSize: 100
         };
 
         async.waterfall([
@@ -187,9 +189,10 @@ function getNodesFromQuery(context, callback) {
 
     var query = context.query;
     var nodes = context.nodes;
+    var queryPageSize = context.queryPageSize || 100;
 
     context.branch.queryNodes(query,{
-        limit: -1,
+        limit: queryPageSize,
         paths: true
     }).each(function() {
         var node = this;
@@ -250,7 +253,7 @@ function downloadNodeAttachments(context, pathPart, node, callback) {
 function downloadAttachment(context, node, pathPart, attachmentId, callback) {
     log.debug("downloadAttachment()");
 
-    var attachmentPath = path.normalize(path.posix.resolve(context.dataFolderPath, pathPart, node._type.replace(':', '__SC__'), node._doc, "attachments"));
+    var attachmentPath = path.normalize(path.posix.resolve(context.dataFolderPath, pathPart, node._type.replace(':', SC_SEPARATOR), node._doc, "attachments"));
     wrench.mkdirSyncRecursive(path.normalize(attachmentPath));
 
     var filename = attachmentId;
@@ -291,7 +294,7 @@ function writeContentInstanceJSONtoDisk(nodes, pathPart, context, callback) {
 
     for(var i = 0; i < nodes.length; i++) {
         var node = cleanNode(nodes[i], "");
-        var filePath = path.normalize(path.posix.resolve(context.dataFolderPath, pathPart, node._type.replace(':', '__SC__'), node._doc || node._source_doc, "node.json"));        
+        var filePath = path.normalize(path.posix.resolve(context.dataFolderPath, pathPart, node._type.replace(':', SC_SEPARATOR), node._doc || node._source_doc, "node.json"));        
         writeJsonFile.sync(filePath, node);
     }
 
@@ -306,11 +309,11 @@ function writeContentInstanceJSONtoDisk(nodes, pathPart, context, callback) {
 }
 
 function buildInstancePath(dataFolderPath, node) {
-    return path.normalize(path.posix.resolve(dataFolderPath, "instances", node._type.replace(':', '__SC__'), node._source_doc, "node.json"));
+    return path.normalize(path.posix.resolve(dataFolderPath, "instances", node._type.replace(':', SC_SEPARATOR), node._source_doc, "node.json"));
 }
 
 function buildRelatedPath(dataFolderPath, node) {
-    return path.normalize(path.posix.resolve(dataFolderPath, "related", node._type.replace(':', '__SC__'), node._source_doc, "node.json"));
+    return path.normalize(path.posix.resolve(dataFolderPath, "related", node._type.replace(':', SC_SEPARATOR), node._source_doc, "node.json"));
 }
 
 function getRelated(list, context, callback) {
@@ -492,11 +495,11 @@ function writeFormJsontoDisk(dataFolderPath, node) {
 }
 
 function buildDefinitionPath(dataFolderPath, node) {
-    return path.normalize(path.posix.resolve(dataFolderPath, "definitions", node._qname.replace(':', '__SC__'), "node.json"));
+    return path.normalize(path.posix.resolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "node.json"));
 }
 
 function buildDefinitionFormPath(dataFolderPath, node, formKey) {
-    return path.normalize(path.posix.resolve(dataFolderPath, "definitions", node._qname.replace(':', '__SC__'), "forms", formKey.replace(':', '__SC__') + ".json"));
+    return path.normalize(path.posix.resolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "forms", formKey.replace(':', SC_SEPARATOR) + ".json"));
 }
 
 function cleanNode(node, qnameMod) {
@@ -694,28 +697,28 @@ function printHelp(optionsList) {
             header: 'Examples',
             content: [
                 {
-                    desc: '1. connect to Cloud CMS and list available definition qnames',
+                    desc: '\n1. connect to Cloud CMS and list available definition qnames',
                 },
                 {
-                    desc: 'node cloudcms-export.js --list-types'
+                    desc: 'npx cloudcms-util export --list-types'
                 },
                 {
-                    desc: '2. export definitions and content records by qname:',
+                    desc: '\n2. export definitions and content records by qname:',
                 },
                 {
-                    desc: 'node cloudcms-export.js --definition-qname "my:type1" "my:type2" --include-instances --folder-path ./data'
+                    desc: 'npx cloudcms-util export --definition-qname "my:type1" "my:type2" --include-instances --folder-path ./data'
                 },
                 {
-                    desc: '3. export all definition nodes:',
+                    desc: '\n3. export all definition nodes:',
                 },
                 {
-                    desc: 'node cloudcms-export.js --all-definitions --include-instances --folder-path ./data'
+                    desc: 'npx cloudcms-util export --all-definitions --include-instances --folder-path ./data'
                 },
                 {
-                    desc: '4. export a list of nodes based on a user defined query:',
+                    desc: '\n4. export a list of nodes based on a user defined query:',
                 },
                 {
-                    desc: 'node cloudcms-export.js -y ./myquery.json --folder-path ./data'
+                    desc: 'npx cloudcms-util export -y ./myquery.json --folder-path ./data'
                 }
             ]
         }

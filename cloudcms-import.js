@@ -18,19 +18,22 @@ const log = new Logger({
 	showTimestamp: true
 });
 const QUERY_BATCH_SIZE = 250;
+const SC_SEPARATOR = "__"; // use this in place of ':' when looking for folders/files
 
 //set OS-dependent path resolve function 
 const isWindows = /^win/.test(process.platform);
 const pathResolve = isWindows ? path.resolve : path.posix.resolve;
 
-// debug only when using charles proxy ssl proxy when intercepting cloudcms api calls:
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+// debug feature. only use when using charles proxy ssl proxy for intercepting cloud cms api calls:
+if (process.env.NODE_ENV === "development") {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
 
 var options = handleOptions();
-if (!options || options.length === 0) {
-    printHelp(getOptions());
+if (!options) {
     return;
 }
+
 if (options["verbose"]) {
     Logger.setLevel('debug', true);
 } else {
@@ -717,7 +720,7 @@ function loadContentInstancesFromDisk(context, callback) {
     
     // find and load json
     for(var i = 0; i < typeDefinitions.length; i++) {
-        var instancesPath = path.normalize(pathResolve(context.dataFolderPath, "instances", typeDefinitions[i].replace(':', '__SC__')));
+        var instancesPath = path.normalize(pathResolve(context.dataFolderPath, "instances", typeDefinitions[i].replace(':', SC_SEPARATOR)));
         var files = util.findFiles(instancesPath, "node.json");
         if (files && Gitana.isArray(files)) {
             for(var j = 0; j < files.length; j++) {
@@ -1042,7 +1045,7 @@ function writeFormToBranch(context, definitionNode, callback) {
         return;
     }
 
-    var formsPath = path.normalize(pathResolve(context.dataFolderPath, "definitions", definitionNode._qname.replace(':', '__SC__'), "forms"));
+    var formsPath = path.normalize(pathResolve(context.dataFolderPath, "definitions", definitionNode._qname.replace(':', SC_SEPARATOR), "forms"));
     var formKeys = [];
     try {
         formKeys = fs.readdirSync(formsPath);
@@ -1056,8 +1059,8 @@ function writeFormToBranch(context, definitionNode, callback) {
     var newFormNodes = [];
 
     for(var i = 0; i < formKeys.length; i++) {
-        var newFormNode = loadFormNodeFromDisk(context, definitionNode._qname.replace(':', '__SC__'), formKeys[i]);
-        newFormNode.__formKey = formKeys[i].replace('__SC__', ':').replace(/\.json$/, '');
+        var newFormNode = loadFormNodeFromDisk(context, definitionNode._qname.replace(':', SC_SEPARATOR), formKeys[i]);
+        newFormNode.__formKey = formKeys[i].replace(SC_SEPARATOR, ':').replace(/\.json$/, '');
         newFormNodes.push(newFormNode);
     }
 
@@ -1231,7 +1234,7 @@ function writeContentInstanceJSONtoDisk(context, callback) {
 }
 
 function buildInstancePath(dataFolderPath, node) {
-    return path.normalize(pathResolve(dataFolderPath, "instances", node._type.replace(':', '__SC__'), node._source_doc, "node.json"));
+    return path.normalize(pathResolve(dataFolderPath, "instances", node._type.replace(':', SC_SEPARATOR), node._source_doc, "node.json"));
 }
 
 function getContentInstances(context, callback) {
@@ -1348,11 +1351,11 @@ function writeDefinitionJSONtoDisk(context, callback) {
 }
 
 function buildDefinitionPath(dataFolderPath, node) {
-    return path.normalize(pathResolve(dataFolderPath, "definitions", node._qname.replace(':', '__SC__'), "node.json"));
+    return path.normalize(pathResolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "node.json"));
 }
 
 function buildFormPath(dataFolderPath, node, formKey) {
-    return path.normalize(pathResolve(dataFolderPath, "definitions", node._qname.replace(':', '__SC__'), "forms", formKey));
+    return path.normalize(pathResolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "forms", formKey));
 }
 
 function cleanNode(node, qnameMod) {
@@ -1391,7 +1394,7 @@ function getDefinitions(context, callback) {
         _qname: { 
             "$in": qnames
         }
-    }
+    };
 
     if (qnames && Gitana.isArray(qnames)) {
         query._qname = {
@@ -1527,7 +1530,7 @@ function handleOptions() {
 
     var options = cliArgs(getOptions());
 
-    if (options.help)
+    if (_.isEmpty(options) || options.help)
     {
         printHelp(getOptions());
         return null;
@@ -1550,22 +1553,22 @@ function printHelp(optionsList) {
             header: 'Examples',
             content: [
                 {
-                    desc: '1. connect to Cloud CMS and list available definition qnames',
+                    desc: '\n1. connect to Cloud CMS and list available definition qnames',
                 },
                 {
-                    desc: 'node mm-import.js --list-types'
+                    desc: 'npx cloudcms-util import --list-types'
                 },
                 {
-                    desc: '2. import definitions and content records by qname:',
+                    desc: '\n2. import definitions and content records by qname:',
                 },
                 {
-                    desc: 'node mm-import.js --definition-qname "mmcx:type1" "mmcx:type2" --include-instances --folder-path ./data'
+                    desc: 'npx cloudcms-util import --definition-qname "test:type1" "test:type2" --include-instances --folder-path ./data'
                 },
                 {
-                    desc: '3. import nodes and their related records:',
+                    desc: '\n3. import nodes and their related records:',
                 },
                 {
-                    desc: 'node mm-import.js --nodes --include-related --folder-path ./data'
+                    desc: 'npx cloudcms-util import --nodes --include-related --folder-path ./data'
                 }
             ]
         }

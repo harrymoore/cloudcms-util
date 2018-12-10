@@ -1,24 +1,28 @@
 {
-  "name": "cloudcms-import-export",
-  "version": "0.0.1",
-  "description": "import cloud cms definitions from local drive",
-  "dependencies": {
-    "async": "*",
-    "basic-logger": "^0.4.4",
-    "command-line-args": "5.0.1",
-    "command-line-usage": "4.1.0",
-    "csv-write-stream": "^2.0.0",
-    "gitana": "^1.0.256",
-    "load-json-file": "^4.0.0",
-    "mime-types": "*",
-    "mkdirp": "*",
-    "prompt-sync": "^4.1.4",
-    "request": "^2.83.0",
-    "underscore": "^1.8.3",
-    "url": "^0.11.0",
-    "wrench": "*",
-    "write-json-file": "^2.3.0"
-  },
-  "optionalDependencies": {},
-  "private": true
+    "name": "cloudcms-util",
+    "version": "1.0.0",
+    "description": "Various Cloud CMS command line utilities. Currently supports import and export of Cloud CMS nodes or definitions",
+    "scripts": {},
+    "keywords": [
+        "cloudcms",
+        "cloud cms"
+    ],
+    "repository": "harrymoore/cloudcms-import-export",
+    "dependencies": {
+        "async": "^2.6.1",
+        "basic-logger": "^0.4.4",
+        "command-line-args": "5.0.1",
+        "command-line-usage": "4.1.0",
+        "gitana": "^1.0.256",
+        "load-json-file": "^4.0.0",
+        "mime-types": "*",
+        "prompt-sync": "^4.1.4",
+        "request": "^2.87.0",
+        "underscore": "^1.9.1",
+        "wrench": "*",
+        "write-json-file": "^2.3.0"
+    },
+    "optionalDependencies": {},
+    "devDependencies": {},
+    "private": false
 }
