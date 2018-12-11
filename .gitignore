@@ -1,0 +1,7 @@
+gitana.json
+gitana-*.json
+*-gitana.json
+data-queries/
+gitana/
+data/
+data2

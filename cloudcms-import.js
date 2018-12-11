@@ -12,13 +12,14 @@ const util = require("./lib/util");
 const writeJsonFile = require('write-json-file');
 const loadJsonFile = require('load-json-file');
 const _ = require('underscore');
+const chalk = require('chalk');
 const Logger = require('basic-logger');
 const log = new Logger({
 	showMillis: false,
 	showTimestamp: true
 });
 const QUERY_BATCH_SIZE = 250;
-const SC_SEPARATOR = "__"; // use this in place of ':' when looking for folders/files
+const SC_SEPARATOR = "__SC__"; // use this in place of ':' when looking for folders/files
 
 //set OS-dependent path resolve function 
 const isWindows = /^win/.test(process.platform);
@@ -96,11 +97,11 @@ function handleNodeImport() {
     util.getBranch(gitanaConfig, option_branchId, function(err, branch, platform, stack, domain, primaryDomain, project) {
         if (err)
         {
-            log.debug("Error connecting to Cloud CMS branch: " + err);
+            log.debug(chalk.red("Error: ") + err);
             return;
         }
 
-        log.info("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc);
+        log.info(chalk.yellow("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc));
         
         var context = {
             branchId: option_branchId,
@@ -131,7 +132,7 @@ function handleNodeImport() {
         ], function (err, context) {
             if (err)
             {
-                log.error("Error importing: " + err);
+                log.error(chalk.red("Error: " + err));
                 return;
             }
 
@@ -149,11 +150,11 @@ function handleImport() {
     util.getBranch(gitanaConfig, option_branchId, function(err, branch, platform, stack, domain, primaryDomain, project) {
         if (err)
         {
-            log.debug("Error connecting to Cloud CMS branch: " + err);
+            log.debug(chalk.red("Error: ") + err);
             return;
         }
 
-        log.info("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc);
+        log.info(chalk.yellow("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc));
         
         var context = {
             branchId: option_branchId,
@@ -184,13 +185,13 @@ function handleImport() {
         ], function (err, context) {
             if (err)
             {
-                log.error("Error importing: " + err);
+                log.debug(chalk.red("Error: ") + err);
                 return;
             }
 
             log.debug(JSON.stringify(context.typeDefinitions, null, 2));
             
-            log.info("Import complete");
+            log.info(chalk.green("Import complete"));
             return;
         });                
     });
@@ -247,7 +248,7 @@ function resolveNodeRefs(context, node) {
             refs[i].qname = newRefNode._qname;
             refs[i].typeQName = newRefNode._type;
         } else {
-            log.error("Could not resolve ref for node " + node._type + " " + node.title + " refId: " + refId + " refTitle: " + refTitle + " refQName: " + refQName + " refTypeQName: " + refTypeQName + " setting title only");
+            log.error(chalk.red("Could not resolve ref for node " + node._type + " " + node.title + " refId: " + refId + " refTitle: " + refTitle + " refQName: " + refQName + " refTypeQName: " + refTypeQName + " setting title only"));
             refs[i].title = refTitle;
         }
     }
@@ -284,7 +285,7 @@ function readExistingNodesFromBranch(context, callback) {
             log.debug("query for existing node by type: " + node._type + " and title:\"" + node.title + "\"");
             context.branch.trap(function(err){
                 log.debug("error looking for existing node: " + node._type + " and title:\"" + node.title + "\"");
-                log.error("err: " + err);
+                log.error(chalk.red("err: " + err));
                 //     // callback();
             //     // return;
             }).queryNodes({
@@ -820,14 +821,14 @@ function writeNodeAttachmentsToBranch(context, callback) {
             mimetype,
             fs.readFileSync(attachmentPath.path))
         .trap(function(err){
-            log.error("Attachment upload failed " + attachmentPath.path + " " + err);
+            log.error(chalk.red("Attachment upload failed " + attachmentPath.path + " " + err));
         }).then(function(){
             log.info("Attachment upload complete");
             callback();
         });
     }, function(err){
         if (err) {
-            log.error("Error uploading attachments: " + err);
+            log.error(chalk.red("Error uploading attachments: " + err));
         }
         return callback(err, context);
     });
@@ -881,7 +882,7 @@ function writeNodesToBranch(nodes, context, callback) {
     async.eachSeries(nodes, async.apply(writeNodeToBranch, context), function (err) {
         if(err)
         {
-            log.error("Error: " + err);
+            log.error(chalk.red("Error: " + err));
             callback(err);
             return;
         }
@@ -969,7 +970,7 @@ function writeInstanceNodesToBranch(context, callback) {
     async.eachSeries(context.instanceNodes, async.apply(writeInstanceNodeToBranch, context), function (err) {
         if(err)
         {
-            log.error("Error: " + err);
+            log.error(chalk.red("Error: " + err));
             callback(err);
             return;
         }
@@ -1028,7 +1029,7 @@ function writeFormsToBranch(context, callback) {
     async.eachSeries(finalDefinitionNodes, async.apply(writeFormToBranch, context), function (err) {
         if(err)
         {
-            log.error("Error loading forms: " + err);
+            log.error(chalk.red("Error loading forms: " + err));
             callback(err);
             return;
         }
@@ -1072,7 +1073,7 @@ function writeFormToBranch(context, definitionNode, callback) {
     async.eachSeries(newFormNodes, async.apply(writeFormNodeToBranch, context, definitionNode), function (err) {
         if(err)
         {
-            log.error("Error loading forms: " + err);
+            log.error(chalk.red("Error loading forms: " + err));
             callback(err);
             return;
         }
@@ -1150,7 +1151,7 @@ function writeDefinitionsToBranch(context, callback) {
     async.eachSeries(typeDefinitions, async.apply(writeDefinitionToBranch, context), function (err) {
         if(err)
         {
-            log.error("Error: " + err);
+            log.error(chalk.red("Error: " + err));
             callback(err);
             return;
         }
@@ -1255,7 +1256,7 @@ function getContentInstances(context, callback) {
     async.eachSeries(typeDefinitions, async.apply(getDefinitionInstances, context), function (err) {
         if(err)
         {
-            log.error("Error reading content instances: " + err);
+            log.error(chalk.red("Error: " + err));
             callback(err);
             return;
         }
@@ -1311,7 +1312,7 @@ function handleListTypes() {
         getDefinitions(context, function(err, context) {
             if (err)
             {
-                log.error("Error listing definition nodes " + err);
+                log.error(chalk.red("Error listing definition nodes: " + err));
                 return;
             }
 
@@ -1446,7 +1447,7 @@ function getDefinitionForms(context, callback) {
     async.eachSeries(typeDefinitions, getDefinitionFormList, function (err) {
         if(err)
         {
-            log.error("Error reading definition forms: " + err);
+            log.error(chalk.red("Error reading definition forms: " + err));
             callback(err);
             return;
         }
@@ -1470,7 +1471,7 @@ function getDefinitionFormAssociations(context, callback) {
     async.eachSeries(typeDefinitions, getDefinitionFormAssociationList, function (err) {
         if(err)
         {
-            log.error("Error reading definition form associations: " + err);
+            log.error(chalk.red("Error reading definition form associations: " + err));
             callback(err);
             return;
         }
