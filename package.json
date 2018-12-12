@@ -1,6 +1,6 @@
 {
     "name": "cloudcms-util",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "description": "Various Cloud CMS command line utilities. Currently supports import and export of Cloud CMS nodes or definitions",
     "bin": {
         "cloudcms-util": "./bin/cloudcms-util.js"

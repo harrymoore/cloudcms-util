@@ -42,7 +42,8 @@ var option_allDefinitions = options["all-definitions"] || false;
 var option_includeInstances = options["include-instances"] || false;
 var option_includeRelated = options["include-related"] || false;
 var option_dataFolderPath = options["folder-path"] || "./data";
-var option_queryFilePath = options["query-file-path"];
+var option_queryFilePath = path.resolve(process.cwd(), options["query-file-path"]);
+console.log("option_queryFilePath " + option_queryFilePath);
 
 //
 // load gitana.json config and override credentials
