@@ -17,7 +17,7 @@ const log = new Logger({
 	showMillis: false,
 	showTimestamp: true
 });
-const SC_SEPARATOR = "__SC__";
+const SC_SEPARATOR = "__";
 
 // debug only when using charles proxy ssl proxy when intercepting cloudcms api calls:
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -42,8 +42,8 @@ var option_allDefinitions = options["all-definitions"] || false;
 var option_includeInstances = options["include-instances"] || false;
 var option_includeRelated = options["include-related"] || false;
 var option_dataFolderPath = options["folder-path"] || "./data";
-var option_queryFilePath = path.resolve(process.cwd(), options["query-file-path"]);
-console.log("option_queryFilePath " + option_queryFilePath);
+var option_queryFilePath = options["query-file-path"];
+log.debug("option_queryFilePath " + option_queryFilePath);
 
 //
 // load gitana.json config and override credentials
@@ -104,7 +104,7 @@ function handleQueryBasedExport() {
             queryFilePath: option_queryFilePath,
             dataFolderPath: option_dataFolderPath,
             includeRelated: option_includeRelated,
-            query: require(option_queryFilePath),
+            query: require(path.normalize(option_queryFilePath)),
             nodes: [],
             relatedIds: [],
             relatedNodes: [],

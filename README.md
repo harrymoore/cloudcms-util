@@ -1,8 +1,18 @@
+# npx script: cloudcms-util
+## Nodejs command line scripts to perform various Cloud CMS related tasks such as import and export json nodes and binary attachments to and from Cloud CMS repositories.
 
-## Nodejs command line scripts to import and export json nodes and binary attachments from Cloud CMS repositories.
+It is not necessary to install cloudcms-util because it runs as an npx script. But it will run faster if it installed first (otherwise npx will install it on demand and remove it when it finishes executing each command).
 
-First run: `npm install`
+## install:
+    npm install -g cloudcms-util
 
+## help:
+    npx cloudcms-util -h
+
+## Command list
+    npx export -h
+    npx import -h
+    
 ## Export:
 ### Export defintions and content instance records from a Cloud CMS project branch
 

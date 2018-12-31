@@ -85,7 +85,7 @@ function handleUsers() {
             return;
         }
 
-        log.info("primary domain id: \"" + primaryDomain.__id() + "\"");
+        log.info("primary domain id: \"" + primaryDomain._doc + "\"");
 
         var context = {
             branch: branch,
@@ -110,7 +110,7 @@ function handleUsers() {
         }
 
         async.waterfall([
-            async.apply(queryUsers, context),
+            async.apply(listDomainUsers, context),
             async.ensureAsync(async.apply(writeNodesJSONtoDisk, "users")),
         ], function (err, context) {
             if(err)
@@ -123,6 +123,18 @@ function handleUsers() {
             return;
         });        
         
+    });
+}
+
+function listDomainUsers(context, callback) {
+    log.debug("listDomainUsers()");
+
+    context.primaryDomain.listPrincipals().then(function() {
+        // console.log( JSON.stringify( this.asArray(),null,2) );
+        context.nodes = _.filter(this.asArray(), function(node){ 
+            return !node.name.startsWith("appuser-");
+        });
+        callback(null, context);
     });
 }
 
@@ -162,8 +174,11 @@ function cleanNode(node, qnameMod) {
     util.enhanceNode(n);
     n = JSON.parse(JSON.stringify(n));
     
-    n._source_doc = n._doc;
+    // n._source_doc = n._doc;
     delete n._doc;
+    delete n.directoryId;
+    delete n.identityId;
+    delete n.domainId;
     
     return n;
 }

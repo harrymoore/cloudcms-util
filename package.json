@@ -1,6 +1,6 @@
 {
     "name": "cloudcms-util",
-    "version": "1.0.2",
+    "version": "2.0.1",
     "description": "Various Cloud CMS command line utilities. Currently supports import and export of Cloud CMS nodes or definitions",
     "bin": {
         "cloudcms-util": "./bin/cloudcms-util.js"
@@ -14,6 +14,7 @@
         "async": "^2.6.1",
         "basic-logger": "^0.4.4",
         "chalk": "^2.4.1",
+        "change-case": "^3.0.2",
         "command-line-args": "5.0.1",
         "command-line-usage": "4.1.0",
         "gitana": "^1.0.277",
@@ -26,6 +27,8 @@
         "write-json-file": "^2.3.0"
     },
     "optionalDependencies": {},
-    "devDependencies": {},
+    "devDependencies": {
+        "jshint": "^2.9.7"
+    },
     "private": false
 }

@@ -19,7 +19,7 @@ const log = new Logger({
 	showTimestamp: true
 });
 const QUERY_BATCH_SIZE = 250;
-const SC_SEPARATOR = "__SC__"; // use this in place of ':' when looking for folders/files
+const SC_SEPARATOR = "__"; // use this in place of ':' when looking for folders/files
 
 //set OS-dependent path resolve function 
 const isWindows = /^win/.test(process.platform);
