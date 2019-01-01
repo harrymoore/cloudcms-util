@@ -109,6 +109,9 @@ function createFormFields(options) {
     var formPath = path.resolve(defPath, "forms", "master.json");
     var form = require(formPath);
 
+    if (overwrite) {
+        form.fields = {};
+    }
     writeFields(definition.properties, form.fields, overwrite);
     // console.log(JSON.stringify(form, null, 2));
 
@@ -117,7 +120,7 @@ function createFormFields(options) {
 }
 
 function writeFields(properties, fields, overwrite) {
-    Object.keys(properties).forEach(function(propertyName, index) {
+    Object.keys(properties).forEach(function(propertyName) {
 
         var property = properties[propertyName];
 
@@ -129,33 +132,41 @@ function writeFields(properties, fields, overwrite) {
 
         var field = fields[propertyName] = {
             'type': 'text',
-            'label': property.title || changeCase.title(property.name),
+            'label': changeCase.title(property.title || property.name),
             'required': !!property.required
         };
 
         if (property.type === 'object') {
             field.type = 'object';
-            field.fields = {};
-            writeFields(property.properties, fields, overwrite);
             if (property._relator) {
                 field.type = "node-picker";
-                field.picker = {
-                    typeQName: property.nodeType || "n:node",
-                    associationType: property.associationType || "a:linked",
-                    includeChildTypes: true
-                };    
+                field.picker = pickerConfig(propertyName, property);
+            } else if (property.properties) {
+                field.fields = {};
+                writeFields(property.properties, field.fields, overwrite);
             }
         } else if (property.type === 'array') {
             field.type = 'array';
             if (property._relator) {
                 field.type = "node-picker";
-                field.picker = {
-                    typeQName: property.nodeType || "n:node",
-                    associationType: property.associationType || "a:linked",
-                    includeChildTypes: true
-                };    
+                field.picker = pickerConfig(propertyName, property);
             } else {
-                writeFields([property.items], [field.items], overwrite);
+                field.items = {
+                    type: "text",
+                    label: property.title
+                };
+
+                if (property.items.type === "object") {
+                    field.items.type = "object";
+                    field.items.fields = {};
+                    writeFields(property.items.properties, field.items.fields, overwrite);
+                } else if (property.items.type === "array") {
+                    field.items.type = "array";
+                } else if (property.items.type === "string") {
+                    field.items.type = "text";
+                } else {
+                    field.items.type = property.items.type;
+                }
             }
         } else if (property.type === 'string') {
             field.required = true;
@@ -165,12 +176,36 @@ function writeFields(properties, fields, overwrite) {
                 property.enum.forEach(function(value) {
                     field.optionLabels.push(value);
                 });
+            } else if (propertyName.toLowerCase().includes("body") || propertyName.toLowerCase().includes("copy")) {
+                field.type = "ckeditor";
             }
         } else {
             field.required = true;
             field.type = property.type;
         }
     });
+}
+
+function pickerConfig(propertyName, property) {
+    if (propertyName.toLowerCase().includes("file") 
+    || propertyName.toLowerCase().includes("upload") 
+    || propertyName.toLowerCase().includes("image") 
+    || propertyName.toLowerCase().includes("attachment") 
+    || propertyName.toLowerCase().includes("pdf") 
+    || propertyName.toLowerCase().includes("document")) {
+        return {
+            type: "related-content",
+            uploadPath: "/images",
+            maxNumberOfFiles: 1,
+            fileTypes: "(\\.|/)(gif|jpe?g|png)$"
+        };    
+    } else {
+        return {
+            typeQName: property.nodeType || "n:node",
+            associationType: property.associationType || "a:linked",
+            includeChildTypes: true
+        };    
+    }
 }
 
 function createNode(options) {
