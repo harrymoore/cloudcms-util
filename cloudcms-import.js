@@ -97,7 +97,7 @@ function handleNodeImport() {
     util.getBranch(gitanaConfig, option_branchId, function(err, branch, platform, stack, domain, primaryDomain, project) {
         if (err)
         {
-            log.debug(chalk.red("Error: ") + err);
+            log.error(chalk.red("Error: ") + err);
             return;
         }
 
@@ -138,7 +138,7 @@ function handleNodeImport() {
 
             // log.debug(JSON.stringify(context.typeDefinitions, null, 2));
             
-            log.info("Import complete");
+            log.info(chalk.green("Import complete"));
             return;
         });                
     });
@@ -150,7 +150,7 @@ function handleImport() {
     util.getBranch(gitanaConfig, option_branchId, function(err, branch, platform, stack, domain, primaryDomain, project) {
         if (err)
         {
-            log.debug(chalk.red("Error: ") + err);
+            log.error(chalk.red("Error: ") + err);
             return;
         }
 
@@ -185,7 +185,7 @@ function handleImport() {
         ], function (err, context) {
             if (err)
             {
-                log.debug(chalk.red("Error: ") + err);
+                log.error(chalk.red("Error: ") + err);
                 return;
             }
 
@@ -1208,8 +1208,13 @@ function writeDefinitionToBranch(context, definitionQname, callback) {
 }
 
 function loadDefinitionNodeFromDisk(context, definitionQname) {
-    var jsonNode = loadJsonFile.sync(buildDefinitionPath(context.dataFolderPath, {_qname: definitionQname}));
-    return jsonNode;
+    try {
+        var jsonNode = loadJsonFile.sync(buildDefinitionPath(context.dataFolderPath, {_qname: definitionQname}));
+        return jsonNode;    
+    } catch(e) {
+        log.error(chalk.red(e));
+        throw e;
+    }
 }
 
 function loadFormNodeFromDisk(context, definitionQname, formKey) {
