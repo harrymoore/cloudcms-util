@@ -140,7 +140,7 @@ function writeFields(properties, fields, overwrite) {
             field.type = 'object';
             if (property._relator) {
                 field.type = "node-picker";
-                field.picker = pickerConfig(propertyName, property);
+                pickerConfig(propertyName, property, field);
             } else if (property.properties) {
                 field.fields = {};
                 writeFields(property.properties, field.fields, overwrite);
@@ -149,7 +149,7 @@ function writeFields(properties, fields, overwrite) {
             field.type = 'array';
             if (property._relator) {
                 field.type = "node-picker";
-                field.picker = pickerConfig(propertyName, property);
+                pickerConfig(propertyName, property, field);
             } else {
                 field.items = {
                     type: "text",
@@ -186,21 +186,23 @@ function writeFields(properties, fields, overwrite) {
     });
 }
 
-function pickerConfig(propertyName, property) {
+function pickerConfig(propertyName, property, field) {
     if (propertyName.toLowerCase().includes("file") 
     || propertyName.toLowerCase().includes("upload") 
     || propertyName.toLowerCase().includes("image") 
     || propertyName.toLowerCase().includes("attachment") 
     || propertyName.toLowerCase().includes("pdf") 
     || propertyName.toLowerCase().includes("document")) {
-        return {
-            type: "related-content",
-            uploadPath: "/images",
-            maxNumberOfFiles: 1,
-            fileTypes: "(\\.|/)(gif|jpe?g|png)$"
-        };    
+        field.type = "related-content";
+        field.uploadPat = "/images";
+        if (property.type === "array") {
+            field.maxNumberOfFiles = 5;
+        } else {
+            field.maxNumberOfFiles = 1;
+        }
+        field.fileTypes = "(\\.|/)(gif|jpe?g|png|svg)$";
     } else {
-        return {
+        field.picker = {
             typeQName: property.nodeType || "n:node",
             associationType: property.associationType || "a:linked",
             includeChildTypes: true
