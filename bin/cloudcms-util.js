@@ -9,6 +9,7 @@ var option_prompt = require('prompt-sync')({
     sigint: true
 });
 var changeCase = require('change-case');
+var randomString = require('random-string-simple');
 var SC_SEPARATOR = "__";
 
 var [,, ... args] = process.argv;
@@ -33,6 +34,9 @@ if (script === "import") {
 } else if (script === "create-form-fields") {
     createFormFields(handleOptions(script));
     return;
+} else if (script === "create-instance-node") {
+    createNode(handleOptions(script), true);
+    return;
 } else if (script === "create-node") {
     createNode(handleOptions(script));
     return;
@@ -46,7 +50,7 @@ if (script === "import") {
 }
 
 function printHelp() {
-    console.log(chalk.blue("Supported commands are: ") + chalk.green("\n\tinit\n\timport\n\texport\n\texport-users\n\tcreate-definition\n\tcreate-form-fields\n\tcreate-node"));
+    console.log(chalk.blue("Supported commands are: ") + chalk.green("\n\tinit\n\timport\n\texport\n\texport-users\n\tcreate-definition\n\tcreate-form-fields\n\tcreate-node\n\tcreate-instance-node"));
 }
 
 function init(options) {
@@ -55,27 +59,27 @@ function init(options) {
         dataPath = option_prompt('Enter data path (ex. ./data): ');
     }
 
+    var normalizedDataPath = path.resolve(process.cwd(), path.normalize(dataPath));
     if (dataPath) {
-        wrench.mkdirSyncRecursive(path.resolve(process.cwd(), path.normalize(dataPath), 'nodes'));
-        wrench.mkdirSyncRecursive(path.resolve(process.cwd(), path.normalize(dataPath), 'definitions'));
-        wrench.mkdirSyncRecursive(path.resolve(process.cwd(), path.normalize(dataPath), 'related'));
+        wrench.mkdirSyncRecursive(path.resolve(normalizedDataPath, 'nodes'));
+        wrench.mkdirSyncRecursive(path.resolve(normalizedDataPath, 'instances'));
+        wrench.mkdirSyncRecursive(path.resolve(normalizedDataPath, 'definitions'));
+        wrench.mkdirSyncRecursive(path.resolve(normalizedDataPath, 'related'));
     } else {
         console.log(chalk.red("bad path: " + dataPath));
     }
+
+    return {
+        data: normalizedDataPath,
+        nodes: path.resolve(normalizedDataPath, 'nodes'),
+        instances: path.resolve(normalizedDataPath, 'instances'),
+        definitions: path.resolve(normalizedDataPath, 'definitions'),
+        related: path.resolve(normalizedDataPath, 'related')
+    };
 }
 
 function createDefinition(options) {
-    var dataPath = options['data-path'] || "data";
-    var defPath;
-
-    if (dataPath) {
-        defPath = path.resolve(process.cwd(), path.normalize(dataPath), 'definitions');
-        wrench.mkdirSyncRecursive(defPath);
-        wrench.mkdirSyncRecursive(path.resolve(process.cwd(), path.normalize(dataPath), 'nodes'));
-        wrench.mkdirSyncRecursive(path.resolve(process.cwd(), path.normalize(dataPath), 'related'));
-    } else {
-        console.log(chalk.red("bad path: " + dataPath));
-    }
+    var defPath = init(options).definitions;
 
     var node = emptyDefinitionNode();
     node._qname = option_prompt('Enter qname: ');
@@ -96,7 +100,7 @@ function createDefinition(options) {
 }
 
 function createFormFields(options) {
-    var dataPath = options['data-path'] || "data";
+    var defPath = init(options).definitions;
     var definitionQName = options["definition-qname"];
     var overwrite = options["overwrite"];
 
@@ -104,7 +108,7 @@ function createFormFields(options) {
         console.log(chalk.red("Bad or missing type qname: " + definitionQName));
     }
 
-    var defPath = path.resolve(process.cwd(), path.normalize(dataPath), 'definitions', definitionQName.replace(':', SC_SEPARATOR));
+    var defPath = path.resolve(dataPath, 'definitions', definitionQName.replace(':', SC_SEPARATOR));
     var definition = require(path.resolve(defPath, "node.json"));
     var formPath = path.resolve(defPath, "forms", "master.json");
     var form = require(formPath);
@@ -113,7 +117,6 @@ function createFormFields(options) {
         form.fields = {};
     }
     writeFields(definition.properties, form.fields, overwrite);
-    // console.log(JSON.stringify(form, null, 2));
 
     writeJsonFile.sync(formPath, form);
     console.log(chalk.green("Completed form: ") + formPath);
@@ -194,7 +197,7 @@ function pickerConfig(propertyName, property, field) {
     || propertyName.toLowerCase().includes("pdf") 
     || propertyName.toLowerCase().includes("document")) {
         field.type = "related-content";
-        field.uploadPat = "/images";
+        field.uploadPath = "/images";
         if (property.type === "array") {
             field.maxNumberOfFiles = 5;
         } else {
@@ -210,25 +213,21 @@ function pickerConfig(propertyName, property, field) {
     }
 }
 
-function createNode(options) {
-    var dataPath = options['data-path'] || "data";
+function createNode(options, instanceNode) {
+    var paths = init(options);
     var defPath;
 
-    if (dataPath) {
-        defPath = path.resolve(process.cwd(), path.normalize(dataPath), 'nodes');
-        wrench.mkdirSyncRecursive(defPath);
-        wrench.mkdirSyncRecursive(path.resolve(process.cwd(), path.normalize(dataPath), 'definitions'));
-        wrench.mkdirSyncRecursive(path.resolve(process.cwd(), path.normalize(dataPath), 'related'));
-    } else {
-        console.log(chalk.red("bad path: " + dataPath));
-    }
-
     var node = emptyNode();
-    node._type = option_prompt('Enter type qname: ');
-    node.title = option_prompt('Enter title: ');
-    node.description = option_prompt('Enter description: ');
+    node._type = options.qname || option_prompt('Enter type qname: ');
+    node.title = options.title || option_prompt('Enter title: ');
+    node.description = options.description || option_prompt('Enter description: ');
+    var id = options.id || option_prompt('Enter (optional) id: ');
 
-    defPath = path.resolve(defPath, node._type.replace(':', SC_SEPARATOR));
+    if (instanceNode) {
+        defPath = path.resolve(paths.instances, node._type.replace(':', SC_SEPARATOR), id || randomString(10, 'abcdefghijklmnopqrstuv0123456789'));
+    } else {
+        defPath = path.resolve(paths.nodes, node._type.replace(':', SC_SEPARATOR), id || randomString(10, 'abcdefghijklmnopqrstuv0123456789'));
+    }
 
     wrench.mkdirSyncRecursive(defPath);
     writeJsonFile.sync(path.resolve(defPath, "node.json"), node);
@@ -244,8 +243,6 @@ function emptyNode() {
         "type": "object",
         "_parent": "n:node",
         "properties": {
-        },
-        "mandatoryFeatures": {
         }
     };
 }
@@ -259,6 +256,8 @@ function emptyDefinitionNode() {
         "type": "object",
         "_parent": "n:node",
         "properties": {
+        },
+        "mandatoryFeatures": {
         }
     };
 }
@@ -276,7 +275,11 @@ function emptyFormNode() {
 function handleOptions(command) {
     var options = [
         {name: 'help', alias: 'h', type: Boolean},
-        {name: 'data-path', alias: 'f', type: String, defaultValue: './data', description: 'data folder path. defaults to ./data'}
+        {name: 'data-path', alias: 'f', type: String, defaultValue: './data', description: 'data folder path. defaults to ./data'},
+        {name: 'qname', alias: 'q', type: String, description: 'qname'},
+        {name: 'title', alias: 't', type: String, defaultValue: '', description: 'title'},
+        {name: 'description', alias: 'd', type: String, defaultValue: '', description: 'description'},
+        {name: 'id', alias: 'i', type: String, description: 'identifier for a node. must be unique from other nodes in the data/nodes or data/instances folder'}
     ];
 
     if (command === 'create-form-fields') {
