@@ -8,10 +8,10 @@ Not to be confused with the official Cloud CMS CLI (https://www.npmjs.com/packag
 
 It is not necessary to install cloudcms-util. It runs as an npx script. But it will run faster if it installed first (otherwise npx will install it on demand and remove it when it finishes executing each command).
 
-## install:
+## Install:
     npm install -g cloudcms-util
 
-## help:
+## Help:
     npx cloudcms-util -h
 
 ## List Local Definitions
@@ -28,7 +28,7 @@ It is not necessary to install cloudcms-util. It runs as an npx script. But it w
 ## Export all defintions
     npx cloudcms-util export -a
     
-## export a list of nodes based on a user defined query:
+## Export a list of nodes based on a user defined query:
     create a mongodb query in the file ./myquery.json
     {
         "_type": "my:type1",
