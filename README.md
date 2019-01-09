@@ -21,14 +21,18 @@ It is not necessary to install cloudcms-util. It runs as an npx script. But it w
     npx cloudcms-util --list-types'
 
 ## Export specified defintions and content instance records
-(required gitana.json in the folder where the script is executed)
-
     npx cloudcms-util export --definition-qname "my:type1" "my:type2" --include-instances
+
+    requires gitana.json in the folder where the script is executed
 
 ## Export all defintions
     npx cloudcms-util export -a
     
 ## export a list of nodes based on a user defined query:
-    (create a mongodb query in the file ./myquery.json)
+    create a mongodb query in the file ./myquery.json
+    {
+        "_type": "my:type1",
+        "foo": "bar"
+    }
 
     npx cloudcms-util export.js -y ./myquery.json
