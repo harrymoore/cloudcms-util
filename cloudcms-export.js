@@ -3,7 +3,7 @@
 /*jshint -W104*/ 
 const Gitana = require("gitana");
 const fs = require("fs");
-const path = require("path");
+const path = require("path").posix;
 const mime = require('mime-types');
 const async = require("async");
 const cliArgs = require('command-line-args');
@@ -104,7 +104,7 @@ function handleQueryBasedExport() {
             queryFilePath: option_queryFilePath,
             dataFolderPath: option_dataFolderPath,
             includeRelated: option_includeRelated,
-            query: require(path.normalize(option_queryFilePath)),
+            query: require(path.resolve(path.normalize(option_queryFilePath))),
             nodes: [],
             relatedIds: [],
             relatedNodes: [],
@@ -254,7 +254,7 @@ function downloadNodeAttachments(context, pathPart, node, callback) {
 function downloadAttachment(context, node, pathPart, attachmentId, callback) {
     log.debug("downloadAttachment()");
 
-    var attachmentPath = path.normalize(path.posix.resolve(context.dataFolderPath, pathPart, node._type.replace(':', SC_SEPARATOR), node._doc, "attachments"));
+    var attachmentPath = path.normalize(path.resolve(context.dataFolderPath, pathPart, node._type.replace(':', SC_SEPARATOR), node._doc, "attachments"));
     wrench.mkdirSyncRecursive(path.normalize(attachmentPath));
 
     var filename = attachmentId;
@@ -278,7 +278,7 @@ function downloadAttachment(context, node, pathPart, attachmentId, callback) {
 function writeContentInstanceJSONtoDisk(nodes, pathPart, context, callback) {
     log.debug("writeContentInstanceJSONtoDisk()");
 
-    var dataFolderPath = path.posix.normalize(context.dataFolderPath);
+    var dataFolderPath = path.normalize(context.dataFolderPath);
     
     if (!Gitana.isArray(nodes)) {
         // flatten to an array if list is an associative array of sub lists (by type)
@@ -295,7 +295,7 @@ function writeContentInstanceJSONtoDisk(nodes, pathPart, context, callback) {
 
     for(var i = 0; i < nodes.length; i++) {
         var node = cleanNode(nodes[i], "");
-        var filePath = path.normalize(path.posix.resolve(context.dataFolderPath, pathPart, node._type.replace(':', SC_SEPARATOR), node._doc || node._source_doc, "node.json"));        
+        var filePath = path.normalize(path.resolve(context.dataFolderPath, pathPart, node._type.replace(':', SC_SEPARATOR), node._doc || node._source_doc, "node.json"));        
         writeJsonFile.sync(filePath, node);
     }
 
@@ -310,11 +310,11 @@ function writeContentInstanceJSONtoDisk(nodes, pathPart, context, callback) {
 }
 
 function buildInstancePath(dataFolderPath, node) {
-    return path.normalize(path.posix.resolve(dataFolderPath, "instances", node._type.replace(':', SC_SEPARATOR), node._source_doc, "node.json"));
+    return path.normalize(path.resolve(dataFolderPath, "instances", node._type.replace(':', SC_SEPARATOR), node._source_doc, "node.json"));
 }
 
 function buildRelatedPath(dataFolderPath, node) {
-    return path.normalize(path.posix.resolve(dataFolderPath, "related", node._type.replace(':', SC_SEPARATOR), node._source_doc, "node.json"));
+    return path.normalize(path.resolve(dataFolderPath, "related", node._type.replace(':', SC_SEPARATOR), node._source_doc, "node.json"));
 }
 
 function getRelated(list, context, callback) {
@@ -456,7 +456,7 @@ function writeDefinitionJSONtoDisk(context, callback) {
     var includeInstances = context.includeInstances;
     var typeDefinitions = context.typeDefinitions;
 
-    dataFolderPath = path.posix.normalize(dataFolderPath)
+    dataFolderPath = path.normalize(dataFolderPath)
     if (fs.existsSync(dataFolderPath)) {
         Object.keys(typeDefinitions).forEach(function(typeId) {
             log.debug(JSON.stringify(typeDefinitions[typeId]));
@@ -496,11 +496,11 @@ function writeFormJsontoDisk(dataFolderPath, node) {
 }
 
 function buildDefinitionPath(dataFolderPath, node) {
-    return path.normalize(path.posix.resolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "node.json"));
+    return path.normalize(path.resolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "node.json"));
 }
 
 function buildDefinitionFormPath(dataFolderPath, node, formKey) {
-    return path.normalize(path.posix.resolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "forms", formKey.replace(':', SC_SEPARATOR) + ".json"));
+    return path.normalize(path.resolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "forms", formKey.replace(':', SC_SEPARATOR) + ".json"));
 }
 
 function cleanNode(node, qnameMod) {

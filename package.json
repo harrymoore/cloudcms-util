@@ -17,6 +17,7 @@
         "change-case": "^3.0.2",
         "command-line-args": "5.0.1",
         "command-line-usage": "4.1.0",
+        "csvtojson": "^2.0.8",
         "gitana": "^1.0.277",
         "load-json-file": "^4.0.0",
         "mime-types": "^2.1.21",

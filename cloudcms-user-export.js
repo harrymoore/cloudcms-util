@@ -229,28 +229,10 @@ function printHelp(optionsList) {
             header: 'Examples',
             content: [
                 {
-                    desc: '1. connect to Cloud CMS and list available definition qnames',
+                    desc: '1. Export all user accounts:',
                 },
                 {
-                    desc: 'node cloudcms-export.js --list-types'
-                },
-                {
-                    desc: '2. export definitions and content records by qname:',
-                },
-                {
-                    desc: 'node cloudcms-export.js --definition-qname "my:type1" "my:type2" --include-instances --folder-path ./data'
-                },
-                {
-                    desc: '3. export all definition nodes:',
-                },
-                {
-                    desc: 'node cloudcms-export.js --all-definitions --include-instances --folder-path ./data'
-                },
-                {
-                    desc: '4. export a list of nodes based on a user defined query:',
-                },
-                {
-                    desc: 'node cloudcms-export.js -y ./myquery.json --folder-path ./data'
+                    desc: 'npx cloudcms-util export-users --all-users -g ./gitana/gitana.json --folder-path ./data'
                 }
             ]
         }

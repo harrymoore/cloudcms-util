@@ -12,29 +12,26 @@ const util = require("./lib/util");
 const writeJsonFile = require('write-json-file');
 const loadJsonFile = require('load-json-file');
 const _ = require('underscore');
-const chalk = require('chalk');
 const Logger = require('basic-logger');
 const log = new Logger({
 	showMillis: false,
 	showTimestamp: true
 });
 const QUERY_BATCH_SIZE = 250;
-const SC_SEPARATOR = "__"; // use this in place of ':' when looking for folders/files
+const SC_SEPARATOR = "__SC__";
 
 //set OS-dependent path resolve function 
 const isWindows = /^win/.test(process.platform);
 const pathResolve = isWindows ? path.resolve : path.posix.resolve;
 
-// debug feature. only use when using charles proxy ssl proxy for intercepting cloud cms api calls:
-if (process.env.NODE_ENV === "development") {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-}
+// debug only when using charles proxy ssl proxy when intercepting cloudcms api calls:
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 var options = handleOptions();
-if (!options) {
+if (!options || options.length === 0) {
+    printHelp(getOptions());
     return;
 }
-
 if (options["verbose"]) {
     Logger.setLevel('debug', true);
 } else {
@@ -45,6 +42,7 @@ var option_prompt = options["prompt"];
 var option_useCredentialsFile = options["use-credentials-file"];
 var option_gitanaFilePath = options["gitana-file-path"] || "./gitana.json";
 var option_branchId = options["branch"] || "master";
+var option_forms = options["create-update-forms"];
 var option_listTypes = options["list-types"];
 var option_definitionQNames = options["definition-qname"]; // array
 var option_allDefinitions = options["all-definitions"] || false;
@@ -72,17 +70,15 @@ if (option_useCredentialsFile) {
     gitanaConfig.password = option_prompt.hide('password: ');
 } // else don't override credentials
 
-util.parseGitana(gitanaConfig);
-
 // if listing types
 if (option_listTypes) {
     // print a list of definition qnames on the project/branch
     handleListTypes();
 } else if (option_nodes) {
-    // upload from json files on local folder to nodes on the branch
+    // download and store data from project/branch to a local folder
     handleNodeImport();
 } else if (option_allDefinitions || (option_definitionQNames && Gitana.isArray(option_definitionQNames))) {
-    // upload from json files on local folder to nodes on the branch
+    // download and store data from project/branch to a local folder
     handleImport();
 } else {
     printHelp(getOptions());
@@ -99,11 +95,11 @@ function handleNodeImport() {
     util.getBranch(gitanaConfig, option_branchId, function(err, branch, platform, stack, domain, primaryDomain, project) {
         if (err)
         {
-            log.error(chalk.red("Error: ") + err);
+            log.debug("Error connecting to Cloud CMS branch: " + err);
             return;
         }
 
-        log.info(chalk.yellow("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc));
+        log.info("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc);
         
         var context = {
             branchId: option_branchId,
@@ -134,13 +130,13 @@ function handleNodeImport() {
         ], function (err, context) {
             if (err)
             {
-                log.error(chalk.red("Error: " + err));
+                log.error("Error importing: " + err);
                 return;
             }
 
             // log.debug(JSON.stringify(context.typeDefinitions, null, 2));
             
-            log.info(chalk.green("Import complete"));
+            log.info("Import complete");
             return;
         });                
     });
@@ -152,11 +148,11 @@ function handleImport() {
     util.getBranch(gitanaConfig, option_branchId, function(err, branch, platform, stack, domain, primaryDomain, project) {
         if (err)
         {
-            log.error(chalk.red("Error: ") + err);
+            log.debug("Error connecting to Cloud CMS branch: " + err);
             return;
         }
 
-        log.info(chalk.yellow("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc));
+        log.info("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc);
         
         var context = {
             branchId: option_branchId,
@@ -165,7 +161,6 @@ function handleImport() {
             importTypeQNames: option_definitionQNames || [],
             typeDefinitions: [],
             dataFolderPath: option_dataFolderPath,
-            includeRelated: option_includeRelated,
             includeInstances: option_includeInstances,
             overwriteExistingInstances: option_overwriteExistingInstances,
             instanceNodes: [],
@@ -188,13 +183,13 @@ function handleImport() {
         ], function (err, context) {
             if (err)
             {
-                log.error(chalk.red("Error: ") + err);
+                log.error("Error importing: " + err);
                 return;
             }
 
             log.debug(JSON.stringify(context.typeDefinitions, null, 2));
             
-            log.info(chalk.green("Import complete"));
+            log.info("Import complete");
             return;
         });                
     });
@@ -251,7 +246,7 @@ function resolveNodeRefs(context, node) {
             refs[i].qname = newRefNode._qname;
             refs[i].typeQName = newRefNode._type;
         } else {
-            log.error(chalk.red("Could not resolve ref for node " + node._type + " " + node.title + " refId: " + refId + " refTitle: " + refTitle + " refQName: " + refQName + " refTypeQName: " + refTypeQName + " setting title only"));
+            log.error("Could not resolve ref for node " + node._type + " " + node.title + " refId: " + refId + " refTitle: " + refTitle + " refQName: " + refQName + " refTypeQName: " + refTypeQName + " setting title only");
             refs[i].title = refTitle;
         }
     }
@@ -288,7 +283,7 @@ function readExistingNodesFromBranch(context, callback) {
             log.debug("query for existing node by type: " + node._type + " and title:\"" + node.title + "\"");
             context.branch.trap(function(err){
                 log.debug("error looking for existing node: " + node._type + " and title:\"" + node.title + "\"");
-                log.error(chalk.red("err: " + err));
+                log.error("err: " + err);
                 //     // callback();
             //     // return;
             }).queryNodes({
@@ -824,14 +819,14 @@ function writeNodeAttachmentsToBranch(context, callback) {
             mimetype,
             fs.readFileSync(attachmentPath.path))
         .trap(function(err){
-            log.error(chalk.red("Attachment upload failed " + attachmentPath.path + " " + err));
+            log.error("Attachment upload failed " + attachmentPath.path + " " + err);
         }).then(function(){
             log.info("Attachment upload complete");
             callback();
         });
     }, function(err){
         if (err) {
-            log.error(chalk.red("Error uploading attachments: " + err));
+            log.error("Error uploading attachments: " + err);
         }
         return callback(err, context);
     });
@@ -885,7 +880,7 @@ function writeNodesToBranch(nodes, context, callback) {
     async.eachSeries(nodes, async.apply(writeNodeToBranch, context), function (err) {
         if(err)
         {
-            log.error(chalk.red("Error: " + err));
+            log.error("Error: " + err);
             callback(err);
             return;
         }
@@ -973,7 +968,7 @@ function writeInstanceNodesToBranch(context, callback) {
     async.eachSeries(context.instanceNodes, async.apply(writeInstanceNodeToBranch, context), function (err) {
         if(err)
         {
-            log.error(chalk.red("Error: " + err));
+            log.error("Error: " + err);
             callback(err);
             return;
         }
@@ -1032,7 +1027,7 @@ function writeFormsToBranch(context, callback) {
     async.eachSeries(finalDefinitionNodes, async.apply(writeFormToBranch, context), function (err) {
         if(err)
         {
-            log.error(chalk.red("Error loading forms: " + err));
+            log.error("Error loading forms: " + err);
             callback(err);
             return;
         }
@@ -1076,7 +1071,7 @@ function writeFormToBranch(context, definitionNode, callback) {
     async.eachSeries(newFormNodes, async.apply(writeFormNodeToBranch, context, definitionNode), function (err) {
         if(err)
         {
-            log.error(chalk.red("Error loading forms: " + err));
+            log.error("Error loading forms: " + err);
             callback(err);
             return;
         }
@@ -1154,7 +1149,7 @@ function writeDefinitionsToBranch(context, callback) {
     async.eachSeries(typeDefinitions, async.apply(writeDefinitionToBranch, context), function (err) {
         if(err)
         {
-            log.error(chalk.red("Error: " + err));
+            log.error("Error: " + err);
             callback(err);
             return;
         }
@@ -1211,13 +1206,8 @@ function writeDefinitionToBranch(context, definitionQname, callback) {
 }
 
 function loadDefinitionNodeFromDisk(context, definitionQname) {
-    try {
-        var jsonNode = loadJsonFile.sync(buildDefinitionPath(context.dataFolderPath, {_qname: definitionQname}));
-        return jsonNode;    
-    } catch(e) {
-        log.error(chalk.red(e));
-        throw e;
-    }
+    var jsonNode = loadJsonFile.sync(buildDefinitionPath(context.dataFolderPath, {_qname: definitionQname}));
+    return jsonNode;
 }
 
 function loadFormNodeFromDisk(context, definitionQname, formKey) {
@@ -1264,7 +1254,7 @@ function getContentInstances(context, callback) {
     async.eachSeries(typeDefinitions, async.apply(getDefinitionInstances, context), function (err) {
         if(err)
         {
-            log.error(chalk.red("Error: " + err));
+            log.error("Error reading content instances: " + err);
             callback(err);
             return;
         }
@@ -1320,7 +1310,7 @@ function handleListTypes() {
         getDefinitions(context, function(err, context) {
             if (err)
             {
-                log.error(chalk.red("Error listing definition nodes: " + err));
+                log.error("Error listing definition nodes " + err);
                 return;
             }
 
@@ -1403,7 +1393,7 @@ function getDefinitions(context, callback) {
         _qname: { 
             "$in": qnames
         }
-    };
+    }
 
     if (qnames && Gitana.isArray(qnames)) {
         query._qname = {
@@ -1455,7 +1445,7 @@ function getDefinitionForms(context, callback) {
     async.eachSeries(typeDefinitions, getDefinitionFormList, function (err) {
         if(err)
         {
-            log.error(chalk.red("Error reading definition forms: " + err));
+            log.error("Error reading definition forms: " + err);
             callback(err);
             return;
         }
@@ -1479,7 +1469,7 @@ function getDefinitionFormAssociations(context, callback) {
     async.eachSeries(typeDefinitions, getDefinitionFormAssociationList, function (err) {
         if(err)
         {
-            log.error(chalk.red("Error reading definition form associations: " + err));
+            log.error("Error reading definition form associations: " + err);
             callback(err);
             return;
         }
@@ -1524,6 +1514,7 @@ function getOptions() {
         {name: 'use-credentials-file', alias: 'c', type: Boolean, description: 'use credentials file ~/.cloudcms/credentials.json. overrides gitana.json credentials'},
         {name: 'gitana-file-path', alias: 'g', type: String, description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json'},
         {name: 'branch', alias: 'b', type: String, description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"'},
+        {name: 'create-update-forms', alias: 'm', type: Boolean, description: 'Create or update form json from type definitions'},
         {name: 'list-types', alias: 'l', type: Boolean, description: 'list type definitions available in the branch'},
         {name: 'definition-qname', alias: 'q', type: String, multiple: true, description: '_qname of the type definition'},
         {name: 'all-definitions', alias: 'a', type: Boolean, description: 'import all locally defined definitions. Or use --definition-qname'},
@@ -1539,7 +1530,7 @@ function handleOptions() {
 
     var options = cliArgs(getOptions());
 
-    if (_.isEmpty(options) || options.help)
+    if (options.help)
     {
         printHelp(getOptions());
         return null;
@@ -1562,22 +1553,19 @@ function printHelp(optionsList) {
             header: 'Examples',
             content: [
                 {
-                    desc: '\n1. connect to Cloud CMS and list available definition qnames',
+                    desc: '1. node mm-import.js --list-types'
                 },
                 {
-                    desc: 'npx cloudcms-util import --list-types'
+                    desc: '2. import definitions and content records by qname:',
                 },
                 {
-                    desc: '\n2. import definitions and content records by qname:',
+                    desc: 'node mm-import.js --definition-qname "mmcx:type1" "mmcx:type2" --include-instances --folder-path ./data'
                 },
                 {
-                    desc: 'npx cloudcms-util import --definition-qname "test:type1" "test:type2" --include-instances --folder-path ./data'
+                    desc: '3. import nodes and their related records:',
                 },
                 {
-                    desc: '\n3. import nodes and their related records:',
-                },
-                {
-                    desc: 'npx cloudcms-util import --nodes --include-related --folder-path ./data'
+                    desc: 'node mm-import.js --nodes --include-related --folder-path ./data'
                 }
             ]
         }

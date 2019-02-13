@@ -25,6 +25,9 @@ if (script === "import") {
 } else if (script === "export-users") {
     require('../cloudcms-user-export');
     return;
+} else if (script === "import-users") {
+    require('../cloudcms-user-import');
+    return;
 } else if (script === "init") {
     init(handleOptions(script));
     return;
