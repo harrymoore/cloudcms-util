@@ -40,6 +40,7 @@ var option_useCredentialsFile = options["use-credentials-file"];
 var option_gitanaFilePath = options["gitana-file-path"] || "./gitana.json";
 var option_dataFolderPath = options["folder-path"];
 var option_csvSource = options["csv-source"];
+var option_defaultPassword = options["default-password"];
 var option_projectId = options["project-id"];
 var option_teamKey = options["team-key"];
 var option_help = options["help"];
@@ -103,6 +104,7 @@ function handleCsvUsers() {
             project: project,
             gitanaConfig: gitanaConfig,
             csvSource: option_csvSource,
+            defaultPassword: option_defaultPassword,
             projectId: option_projectId,
             teamKey: option_teamKey,
             usersToImport: null // stores the data from the csv file after parsing
@@ -110,9 +112,10 @@ function handleCsvUsers() {
 
         async.waterfall([
             async.ensureAsync(async.apply(parseCsv, context)),
-                async.ensureAsync(queryExistingUsers),
-                    async.ensureAsync(createMissingUsers),
-                        async.ensureAsync(addUsersToProject),
+            async.ensureAsync(queryExistingUsers),
+            async.ensureAsync(createMissingUsers),
+            async.ensureAsync(addUsersToProject),
+            async.ensureAsync(addUsersToProjectTeam)
         ], function (err, context) {
             if (err) {
                 log.error("Error importing: " + err);
@@ -160,8 +163,7 @@ function handleUsers() {
         }
 
         async.waterfall([
-            async.apply(queryUsers, context),
-                async.ensureAsync(async.apply(writeNodesJSONtoDisk, "users")),
+            async.apply(queryUsers, context)
         ], function (err, context) {
             if (err) {
                 log.error("Error exporting: " + err);
@@ -208,6 +210,7 @@ function queryExistingUsers(context, callback) {
         context.existingUserNames = _.each(context.existingUsers, function (user) {
             return user.name;
         });
+
         callback(null, context);
     });
 }
@@ -215,54 +218,81 @@ function queryExistingUsers(context, callback) {
 function createMissingUsers(context, callback) {
     log.debug("createMissingUsers()");
 
-    async.eachSeries(_.filter(context.usersToImport, function (newUser) {
+    var newUsers = _.filter(context.usersToImport, function (newUser) {
         return _.isEmpty(context.existingUserNames[newUser.name || newUser.NAME]);
-    }), function (userToCreate, callback) {
-        Chain(context.primaryDomain).trap(function (err) {
-            if (err) {
-                log.debug("Error with primary domain: " + err);
+    });
+
+    if (!option_defaultPassword) {
+        // if no default password then filter out users with no password
+        newUsers = _.filter(newUsers, function (newUser) {
+            var pw = newUser.password || newUser.PASSWORD;
+            if (_.isEmpty(pw)) {
+                log.warn("Skipping user \"" + (newUser.NAME || newUser.name) + "\". No password specified and there is no --default-password option.");
+                return false;
             }
-            callback(null, context);
-            return;
-        }).createUser(userToCreate).then(function () {            
+
+            return true;
+        });
+    }
+
+    async.eachSeries(newUsers, function (user, callback) {
+
+        var userObject = {
+            name: user.name || user.NAME,
+            email: user.email || user.EMAIL,
+            first: user.first || user.FIRST,
+            last: user.last || user.LAST,
+            company: user.company || user.COMPANY,
+            password: user.password || user.PASSWORD || context.defaultPassword,
+        };
+
+        Chain(context.primaryDomain).trap(function(err) {
+            console.log("user create failed on primary domain: " + JSON.stringify(err));
+            return callback(err);
+        }).createUser(userObject).then(function() {
             var node = this;
-            log.info("Created user node " + node._doc);
+            user.node = node;
+            log.info("Created user node " + node._doc + " for \"" + userObject.name + "\"");
+            callback(null, context);
         });
     });
 }
 
 function addUsersToProject(context, callback) {
     log.debug("addUsersToProject()");
-    callback(null, context);
-}
-
-function writeNodesJSONtoDisk(pathPart, context, callback) {
-    log.debug("writeNodesJSONtoDisk()");
-
-    var dataFolderPath = path.posix.normalize(context.dataFolderPath);
-    var nodes = context.nodes;
-
-    for (var i = 0; i < nodes.length; i++) {
-        var node = cleanNode(nodes[i], "");
-        var filePath = path.normalize(path.posix.resolve(context.dataFolderPath, pathPart, node.name, "node.json"));
-        writeJsonFile.sync(filePath, node);
+    
+    if (!option_projectId) {
+        // no project id specified
+        return callback(null, context);
     }
 
-    callback(null, context);
+    async.eachSeries(context.usersToImport, function (user, callback) {
+        context.project.inviteUser(user.node._doc).then(function() {
+            log.info("Added user to the project" + userId);
+            callback(null, context);
+        });
+    });
 }
 
-function cleanNode(node, qnameMod) {
-    var n = node;
-    util.enhanceNode(n);
-    n = JSON.parse(JSON.stringify(n));
+function addUsersToProjectTeam(context, callback) {
+    log.debug("addUsersToProjectTeam()");
+    
+    if (!option_projectId) {
+        // no project id specified
+        return callback(null, context);
+    }
+    
+    if (!option_teamKey) {
+        // no team key specified
+        return callback(null, context);
+    }
 
-    // n._source_doc = n._doc;
-    delete n._doc;
-    delete n.directoryId;
-    delete n.identityId;
-    delete n.domainId;
-
-    return n;
+    async.eachSeries(context.usersToImport, function (user, callback) {
+        context.project.readTeam(option_teamKey).inviteUser(user.node._doc).then(function() {
+            log.info("Added user to the project team" + userId);
+            callback(null, context);
+        });
+    });
 }
 
 function logContext(context, callback) {
@@ -310,6 +340,11 @@ function getOptions() {
             name: 'csv-source',
             type: String,
             description: 'path to a csv file with user information. The csv file should have headers: NAME, EMAIL, FIRST, LAST, COMPANY, PASSWORD. COMPANY and PASSWORD values are optional.'
+        },
+        {
+            name: 'default-password',
+            type: String,
+            description: 'password to use when a row in the csv does not specify one. This is optional. However, a user cannot be created without a password'
         },
         {
             name: 'project-id',
