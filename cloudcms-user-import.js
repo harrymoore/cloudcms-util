@@ -36,6 +36,8 @@ if (options["verbose"]) {
 }
 
 var option_prompt = options["prompt"];
+var option_username = options["username"];
+var option_password = options["password"];
 var option_useCredentialsFile = options["use-credentials-file"];
 var option_gitanaFilePath = options["gitana-file-path"] || "./gitana.json";
 var option_dataFolderPath = options["folder-path"];
@@ -61,7 +63,15 @@ if (option_useCredentialsFile) {
     });
     gitanaConfig.username = option_prompt('name: ');
     gitanaConfig.password = option_prompt.hide('password: ');
-} // else don't override credentials
+}
+
+if (option_username) {
+    gitanaConfig.username = option_username;
+}
+
+if (option_password) {
+    gitanaConfig.password = option_password;
+}
 
 util.parseGitana(gitanaConfig);
 
@@ -195,7 +205,9 @@ function parseCsv(context, callback) {
 function queryExistingUsers(context, callback) {
     log.debug("queryExistingUsers()");
 
+    var usersByName = {};
     var userNames = _.map(context.usersToImport, function (user) {
+        usersByName[user.name || user.NAME] = user;
         return user.name || user.NAME;
     });
 
@@ -205,6 +217,11 @@ function queryExistingUsers(context, callback) {
         }
     }, {
         limit: -1
+    }).eachX(function () {
+        var node = this;
+        if (usersByName[node.name]) {
+            usersByName[node.name].node = node;
+        }
     }).then(function () {
         context.existingUsers = this.asArray();
         context.existingUserNames = _.each(context.existingUsers, function (user) {
@@ -246,52 +263,71 @@ function createMissingUsers(context, callback) {
             password: user.password || user.PASSWORD || context.defaultPassword,
         };
 
-        Chain(context.primaryDomain).trap(function(err) {
-            console.log("user create failed on primary domain: " + JSON.stringify(err));
-            return callback(err);
-        }).createUser(userObject).then(function() {
+        Chain(context.primaryDomain).trap(function (err) {
+            log.warn("user create failed on primary domain: " + JSON.stringify(err.message || err));
+            callback();
+        }).createUser(userObject).then(function () {
             var node = this;
             user.node = node;
             log.info("Created user node " + node._doc + " for \"" + userObject.name + "\"");
-            callback(null, context);
+            callback();
         });
+    }, function () {
+        // update list of users to filter out users who could not be created
+        context.usersToImport = _.filter(context.usersToImport, function (user) {
+            return !_.isEmpty(user.node);
+        });
+
+        callback(null, context);
     });
 }
 
 function addUsersToProject(context, callback) {
     log.debug("addUsersToProject()");
-    
+
     if (!option_projectId) {
         // no project id specified
         return callback(null, context);
     }
 
-    async.eachSeries(context.usersToImport, function (user, callback) {
-        context.project.inviteUser(user.node._doc).then(function() {
-            log.info("Added user to the project" + userId);
+    async.eachSeries(context.usersToImport,
+        function (user, callback) {
+            Chain(context.project).trap(function (err) {
+                log.warn("Error adding user " + user.node.name + " " + user.node._doc + " to the project " + option_projectId + ".  " + err);
+                callback();
+            }).inviteUser(user.node._doc).then(function () {
+                log.info("Added user to the project " + user.node.name + " " + user.node._doc);
+                callback(null, context);
+            });
+        }, function (err) {
             callback(null, context);
-        });
-    });
+        }
+    );
 }
 
 function addUsersToProjectTeam(context, callback) {
     log.debug("addUsersToProjectTeam()");
-    
+
     if (!option_projectId) {
         // no project id specified
         return callback(null, context);
     }
-    
+
     if (!option_teamKey) {
         // no team key specified
         return callback(null, context);
     }
 
     async.eachSeries(context.usersToImport, function (user, callback) {
-        context.project.readTeam(option_teamKey).inviteUser(user.node._doc).then(function() {
+        Chain(context.stack).trap(function (err) {
+            log.warn("Error adding user " + user.node.name + " " + user.node._doc + " to the project team " + option_teamKey + ".  " + err);
+            callback();
+        }).readTeam(option_teamKey).addMember(user.node).then(function () {
             log.info("Added user to the project team" + userId);
-            callback(null, context);
+            callback();
         });
+    }, function (err) {
+        callback(err, context);
     });
 }
 
@@ -317,6 +353,16 @@ function getOptions() {
             alias: 'p',
             type: Boolean,
             description: 'prompt for username and password. overrides gitana.json credentials'
+        },
+        {
+            name: 'username',
+            type: String,
+            description: 'username for api login. overrides gitana.json credentials'
+        },
+        {
+            name: 'password',
+            type: String,
+            description: 'password for api login. overrides gitana.json credentials'
         },
         {
             name: 'use-credentials-file',
