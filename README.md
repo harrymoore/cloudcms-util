@@ -36,3 +36,19 @@ It is not necessary to install cloudcms-util. It runs as an npx script. But it w
     }
 
     npx cloudcms-util export.js -y ./myquery.json
+
+## Import users from a CSV file to the primary platform domain. Optionally add the users to a project.
+
+    npx cloudcms-util import-users -g ./gitana/gitana-local.json --csv-source ./data/users-test1.csv --default-password "This13ThePassword" --project-id 5751b6235492fef8614d --team-key project-managers-team --username admin --password admin
+
+Adding users is a platform operation and requires admin privileges. Use either --prompt or --username and --password to enter credentials of a user with sufficient platform privileged.
+
+If the user already exists in the platform it will not be modified. Therefor you can run this import process over and over again to ensure missing users are created or to add the users to a different project and/or project team.
+
+Users require a password. If the PASSWORD column is empty for any user then the user will be skipped. Unless you use the --default-password option. If both are present then the PASSWORD column value takes precedence.
+
+The CSV file is required to have a header as the first row. The headers should be: NAME,EMAIL,FIRST,LAST,COMPANY,PASSWORD. The header text does not actually matter. The first column is expeced to me NAME, the second column EMAIL, etc.
+Example: 
+NAME,EMAIL,FIRST,LAST,COMPANY,PASSWORD
+mary,mary.user1@email.com,Marry,User1,this company,
+edith,edith.m.user2@anotheremail.com,Edith,User2,,Hello$World.1

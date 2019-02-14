@@ -1,6 +1,6 @@
 {
     "name": "cloudcms-util",
-    "version": "2.0.4",
+    "version": "2.1.0",
     "description": "Various Cloud CMS command line utilities. Currently supports import and export of Cloud CMS nodes or definitions",
     "bin": {
         "cloudcms-util": "./bin/cloudcms-util.js"
@@ -11,14 +11,14 @@
     ],
     "repository": "harrymoore/cloudcms-import-export",
     "dependencies": {
-        "async": "^2.6.1",
+        "async": "^2.6.2",
         "basic-logger": "^0.4.4",
-        "chalk": "^2.4.1",
-        "change-case": "^3.0.2",
+        "chalk": "^2.4.2",
+        "change-case": "^3.1.0",
         "command-line-args": "5.0.1",
         "command-line-usage": "4.1.0",
         "csvtojson": "^2.0.8",
-        "gitana": "^1.0.277",
+        "gitana": "^1.0.288",
         "load-json-file": "^4.0.0",
         "mime-types": "^2.1.21",
         "prompt-sync": "^4.1.4",
@@ -30,7 +30,7 @@
     },
     "optionalDependencies": {},
     "devDependencies": {
-        "jshint": "^2.9.7"
+        "jshint": "^2.10.1"
     },
     "private": false
 }

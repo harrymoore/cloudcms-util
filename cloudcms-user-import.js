@@ -117,7 +117,8 @@ function handleCsvUsers() {
             defaultPassword: option_defaultPassword,
             projectId: option_projectId,
             teamKey: option_teamKey,
-            usersToImport: null // stores the data from the csv file after parsing
+            usersToImport: null, // stores the data from the csv file after parsing
+            existingUsersByName: {}
         };
 
         async.waterfall([
@@ -194,7 +195,10 @@ function parseCsv(context, callback) {
         callback("csv file not found: " + option_csvSource, context);
     }
 
-    csv().fromFile(option_csvSource).then(function (data) {
+    csv({
+        noheader: false,
+        headers: ['name','email','first','last','company','password']
+    }).fromFile(option_csvSource).then(function (data) {
         context.usersToImport = data;
         log.info("usersToImport: " + JSON.stringify(context.usersToImport, null, 2));
         callback(null, context);
@@ -205,29 +209,18 @@ function parseCsv(context, callback) {
 function queryExistingUsers(context, callback) {
     log.debug("queryExistingUsers()");
 
-    var usersByName = {};
-    var userNames = _.map(context.usersToImport, function (user) {
-        usersByName[user.name || user.NAME] = user;
-        return user.name || user.NAME;
-    });
-
     context.primaryDomain.queryUsers({
         name: {
-            "$in": userNames
+            "$in": _.pluck(context.usersToImport, 'name')
         }
     }, {
         limit: -1
-    }).eachX(function () {
+    }).each(function () {
         var node = this;
-        if (usersByName[node.name]) {
-            usersByName[node.name].node = node;
-        }
+        context.existingUsersByName[node.name] = this;
     }).then(function () {
         context.existingUsers = this.asArray();
-        context.existingUserNames = _.each(context.existingUsers, function (user) {
-            return user.name;
-        });
-
+        context.existingUserNames = _.pluck(context.existingUsers, 'name');
         callback(null, context);
     });
 }
@@ -235,48 +228,37 @@ function queryExistingUsers(context, callback) {
 function createMissingUsers(context, callback) {
     log.debug("createMissingUsers()");
 
-    var newUsers = _.filter(context.usersToImport, function (newUser) {
-        return _.isEmpty(context.existingUserNames[newUser.name || newUser.NAME]);
+    // which users need to be created
+    var missingUsers = _.filter(context.usersToImport, function (user) {
+        return _.isEmpty(context.existingUsersByName[user.name]);
     });
 
     if (!option_defaultPassword) {
         // if no default password then filter out users with no password
-        newUsers = _.filter(newUsers, function (newUser) {
-            var pw = newUser.password || newUser.PASSWORD;
-            if (_.isEmpty(pw)) {
-                log.warn("Skipping user \"" + (newUser.NAME || newUser.name) + "\". No password specified and there is no --default-password option.");
-                return false;
-            }
-
-            return true;
+        missingUsers = _.filter(missingUsers, function (user) {
+            return !_.isEmpty(user.password);
         });
     }
 
-    async.eachSeries(newUsers, function (user, callback) {
+    async.eachSeries(missingUsers, function (user, callback) {
 
-        var userObject = {
-            name: user.name || user.NAME,
-            email: user.email || user.EMAIL,
-            first: user.first || user.FIRST,
-            last: user.last || user.LAST,
-            company: user.company || user.COMPANY,
-            password: user.password || user.PASSWORD || context.defaultPassword,
-        };
+        user.password = user.password || context.defaultPassword;
 
         Chain(context.primaryDomain).trap(function (err) {
-            log.warn("user create failed on primary domain: " + JSON.stringify(err.message || err));
+            log.warn("user create failed on primary domain: " + user.name + " " + JSON.stringify(err.message || err));
             callback();
-        }).createUser(userObject).then(function () {
+        }).createUser(user).then(function () {
             var node = this;
-            user.node = node;
-            log.info("Created user node " + node._doc + " for \"" + userObject.name + "\"");
+            context.existingUsersByName[node.name] = node;
+            context.existingUsers.push(node);
+            log.info("Created user node " + node._doc + " for \"" + user.name + "\"");    
             callback();
         });
     }, function () {
-        // update list of users to filter out users who could not be created
-        context.usersToImport = _.filter(context.usersToImport, function (user) {
-            return !_.isEmpty(user.node);
-        });
+        // // update list of users to filter out users who could not be created
+        // context.usersToImport = _.filter(context.usersToImport, function (user) {
+        //     return !_.isEmpty(user.node);
+        // });
 
         callback(null, context);
     });
@@ -290,13 +272,13 @@ function addUsersToProject(context, callback) {
         return callback(null, context);
     }
 
-    async.eachSeries(context.usersToImport,
+    async.eachSeries(context.existingUsers,
         function (user, callback) {
             Chain(context.project).trap(function (err) {
-                log.warn("Error adding user " + user.node.name + " " + user.node._doc + " to the project " + option_projectId + ".  " + err);
+                log.warn("Error adding user " + user.name + " " + user._doc + " to the project " + option_projectId + ".  " + err);
                 callback();
-            }).inviteUser(user.node._doc).then(function () {
-                log.info("Added user to the project " + user.node.name + " " + user.node._doc);
+            }).inviteUser(user._doc).then(function () {
+                log.info("Added user " + user.name + " " + user._doc + " to the project");
                 callback(null, context);
             });
         }, function (err) {
@@ -318,12 +300,12 @@ function addUsersToProjectTeam(context, callback) {
         return callback(null, context);
     }
 
-    async.eachSeries(context.usersToImport, function (user, callback) {
+    async.eachSeries(context.existingUsers, function (user, callback) {
         Chain(context.stack).trap(function (err) {
-            log.warn("Error adding user " + user.node.name + " " + user.node._doc + " to the project team " + option_teamKey + ".  " + err);
+            log.warn("Error adding user " + user.name + " " + user._doc + " to the project team " + option_teamKey + ".  " + err);
             callback();
-        }).readTeam(option_teamKey).addMember(user.node).then(function () {
-            log.info("Added user to the project team" + userId);
+        }).readTeam(option_teamKey).addMember(user).then(function () {
+            log.info("Added user to the project team " + user.name + " " + user._doc + " " + option_teamKey);
             callback();
         });
     }, function (err) {
