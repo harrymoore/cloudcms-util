@@ -197,7 +197,7 @@ function parseCsv(context, callback) {
 
     csv({
         noheader: false,
-        headers: ['name','email','first','last','company','password']
+        headers: ['name','email','firstName','lastName','company','password']
     }).fromFile(option_csvSource).then(function (data) {
         context.usersToImport = data;
         log.info("usersToImport: " + JSON.stringify(context.usersToImport, null, 2));
