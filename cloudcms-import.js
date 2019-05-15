@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /*jshint -W069 */ 
 /*jshint -W104*/ 
+/*jshint -W083 */
 const Gitana = require("gitana");
 const fs = require("fs");
 const path = require("path");
 const mime = require('mime-types');
 const async = require("async");
 const cliArgs = require('command-line-args');
-const commandLineUsage = require('command-line-usage')
+const commandLineUsage = require('command-line-usage');
 const util = require("./lib/util");
 const writeJsonFile = require('write-json-file');
 const loadJsonFile = require('load-json-file');
@@ -286,17 +287,22 @@ function readExistingNodesFromBranch(context, callback) {
             });
         } else if (node.title) {
             log.debug("query for existing node by type: " + node._type + " and title:\"" + node.title + "\"");
+
+            var titleRegex = "^";
+            titleRegex += node.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            titleRegex += "$";
+
             context.branch.trap(function(err){
                 log.debug("error looking for existing node: " + node._type + " and title:\"" + node.title + "\"");
                 log.error(chalk.red("err: " + err));
                 //     // callback();
             //     // return;
             }).queryNodes({
-                title: { 
-                    "$regex": "^" + node.title.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
+                "title": { 
+                    "$regex": titleRegex,
                     "$options": "i"
                 },
-                _type: node._type
+                "_type": node._type
             }).then(function() {
                 if (this.size() === 0) {
                     log.debug("node not found for title: " + node.title);
@@ -314,8 +320,10 @@ function readExistingNodesFromBranch(context, callback) {
                     return;
                 });                        
             });
+
         } else {
             log.debug("query for existing node by _qname: " + node._qname);
+
             context.branch.trap(function(){
                 // not found
                 log.debug("node not found for _qname: " + node._qname);
@@ -336,6 +344,7 @@ function readExistingNodesFromBranch(context, callback) {
                 callback();
                 return;
             });
+
         }
     }, function() {
         callback(null, context);
@@ -455,7 +464,7 @@ function readExistingRelatedNodesFromBranchBatch(context, callback) {
                         {
                             _type: ref.typeQName,
                             title: { 
-                                "$regex": "^" + ref.title.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
+                                "$regex": "^" + ref.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
                                 "$options": "i"
                             }                    
                         },
@@ -468,7 +477,7 @@ function readExistingRelatedNodesFromBranchBatch(context, callback) {
                 q = {
                     _type: ref.typeQName,
                     title: { 
-                        "$regex": "^" + ref.title.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
+                        "$regex": "^" + ref.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
                         "$options": "i"
                     }
                 };
@@ -546,7 +555,7 @@ function readExistingRelatedNodesFromBranch(context, callback) {
                         _type: ref.typeQName,
                         // title: ref.title
                         title: { 
-                            "$regex": "^" + ref.title.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
+                            "$regex": "^" + ref.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
                             "$options": "i"
                         }                    
                     },
@@ -646,13 +655,32 @@ function loadAllDefinitionsFromDisk(context, callback) {
             arr[jsonNode._qname] = jsonNode;
         }
 
+        log.info("Type qnames found: \n" +  Object.keys(arr).join("\n"));
+
+        log.info ("Checking for Circular Dependencies");
+        var white = new Set(Object.keys(arr));
+        var gray = new Set();
+        var black = new Set();
+        while (white.size > 0) {
+            // var it = white.values();
+            var current = white.values().next().value;
+            if(_detectCircularDependencies(arr, current, white, gray, black)) {
+                callback("Circular Dependency detected", context);
+                return;
+            }
+        }
+        log.info ("No Circular Dependencies detected");
+
         log.info ("Resolve Dependency Order");
         var dependencyOrderedTypeDefinitions = [];
         var arrKeys = Object.keys(arr);
         var keys = {};
         for(i = 0; i < arrKeys.length; i++) {
             var node = arr[arrKeys[i]];
-            _resolveDependencyOrder(node, arr, arrKeys, dependencyOrderedTypeDefinitions, keys);
+            if (_resolveDependencyOrder(node, arr, arrKeys, dependencyOrderedTypeDefinitions, keys)) {
+                callback("Dependency check failed", context);
+                return;
+            }
         }
 
         context.importTypeQNames = dependencyOrderedTypeDefinitions;
@@ -661,20 +689,60 @@ function loadAllDefinitionsFromDisk(context, callback) {
     return callback(null, context);
 }
 
+function _detectCircularDependencies(arr, current, white, gray, black) {
+    white.delete(current);
+    gray.add(current);
+
+    var dependencies = _dependsOn(arr[current]);
+    log.info(current + " depends on: " + (dependencies.length ? dependencies.join(", ") : "N/A"));
+    for(i = 0; i < dependencies.length; i++) {
+        var neighbor = dependencies[i];
+
+        // if in black set means already explored so continue.
+        if (black.has(neighbor)) {
+            continue;
+        }
+
+        // if in gray set then cycle found.
+        if (gray.has(neighbor)) {
+            return true;
+        }
+
+        if(_detectCircularDependencies(arr, neighbor, white, gray, black)) {
+            return true;
+        }
+    }
+
+    //move vertex from gray set to black set when done exploring.
+    gray.delete(current);
+    black.add(current);
+
+    return false;
+}
+
 function _resolveDependencyOrder(typeDefinion, arr, arrKeys, resolved, resolvedKeys) {
     var dependencies = _dependsOn(typeDefinion);
     for(var i = 0; i < dependencies.length; i++) {
         var node = arr[dependencies[i]];
+        
         if (!node) {
-            log.warn("_resolveDependencyOrder() dependency node for definition:" + typeDefinion._qname + " not found for _qname: " + dependencies[i]);
-            continue;
+            log.error("_resolveDependencyOrder() dependency node for definition:" + typeDefinion._qname + " not found for _qname: " + dependencies[i]);
+            return -1;
         }
+
         if (!node._qname) {
-            log.warn("_resolveDependencyOrder() node has no _qname: " + JSON.stringify(node,null,2));
-            continue;
+            log.error("_resolveDependencyOrder() node has no _qname: " + JSON.stringify(node,null,2));
+            return -1;
         }
+
         if (!resolvedKeys[node._qname]) {
-            _resolveDependencyOrder(node, arr, arrKeys, resolved, resolvedKeys);
+            if (_resolveDependencyOrder(node, arr, arrKeys, resolved, resolvedKeys)) {
+                log.error("Dependency check failed for qname: " + node._qname);
+                return -1;
+            }
+
+            resolvedKeys[node._qname] = 1;
+            resolved.push(node._qname);
         }
     }
 
@@ -682,12 +750,6 @@ function _resolveDependencyOrder(typeDefinion, arr, arrKeys, resolved, resolvedK
         resolvedKeys[typeDefinion._qname] = 1;
         resolved.push(typeDefinion._qname);
     }
-
-    // print node.name
-    // for edge in node.edges:
-    //        if edge not in resolved:
-    //               dep_resolve(edge, resolved)
-    // resolved.append(node) 
 }
 
 function _dependsOn(node) {
@@ -1280,7 +1342,7 @@ function getDefinitionInstances(context, typeDefinitionNode, callback) {
 
     var query = {
         _type: typeDefinitionNode._qname
-    }
+    };
 
     if (!context.instanceNodes[typeDefinitionNode._qname]) {
         context.instanceNodes[typeDefinitionNode._qname] = [];
@@ -1339,7 +1401,7 @@ function writeDefinitionJSONtoDisk(context, callback) {
     var includeInstances = context.includeInstances;
     var typeDefinitions = context.typeDefinitions;
 
-    dataFolderPath = path.posix.normalize(dataFolderPath)
+    dataFolderPath = path.posix.normalize(dataFolderPath);
     if (fs.existsSync(dataFolderPath)) {
         Object.keys(typeDefinitions).forEach(function(typeId) {
             log.debug(JSON.stringify(typeDefinitions[typeId]));
