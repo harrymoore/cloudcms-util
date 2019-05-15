@@ -693,7 +693,10 @@ function _detectCircularDependencies(arr, current, white, gray, black) {
     white.delete(current);
     gray.add(current);
 
-    var dependencies = _dependsOn(arr[current]);
+    var dependencies = [];
+    if (arr[current]) {
+        dependencies = _dependsOn(arr[current]);
+    }
     log.info(current + " depends on: " + (dependencies.length ? dependencies.join(", ") : "N/A"));
     for(i = 0; i < dependencies.length; i++) {
         var neighbor = dependencies[i];
@@ -721,7 +724,10 @@ function _detectCircularDependencies(arr, current, white, gray, black) {
 }
 
 function _resolveDependencyOrder(typeDefinion, arr, arrKeys, resolved, resolvedKeys) {
-    var dependencies = _dependsOn(typeDefinion);
+    var dependencies = [];
+    if (arr[current]) {
+        dependencies = _dependsOn(typeDefinion);
+    }
     for(var i = 0; i < dependencies.length; i++) {
         var node = arr[dependencies[i]];
         
