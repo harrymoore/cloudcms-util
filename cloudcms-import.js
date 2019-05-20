@@ -21,6 +21,7 @@ const log = new Logger({
 });
 const QUERY_BATCH_SIZE = 250;
 const SC_SEPARATOR = "__"; // use this in place of ':' when looking for folders/files
+const OLD_SC_SEPARATOR = "__SC__"; // use this in place of ':' when looking for folders/files (original value)
 
 //set OS-dependent path resolve function 
 const isWindows = /^win/.test(process.platform);
@@ -1261,6 +1262,8 @@ function writeDefinitionToBranch(context, definitionQname, callback) {
     var newDefinitionNode = loadDefinitionNodeFromDisk(context, definitionQname);
     if (definitionNode) {
         // update
+        log.debug("Updating definition node " + newDefinitionNode._qname + " " + newDefinitionNode.title);
+
         util.updateDocumentProperties(definitionNode, newDefinitionNode);
         
         definitionNode.update().trap(function(err){
@@ -1278,6 +1281,8 @@ function writeDefinitionToBranch(context, definitionQname, callback) {
     else
     {
         // create
+        log.debug("Creating definition node " + newDefinitionNode._qname + " " + newDefinitionNode.title);
+
         context.branch.createNode(newDefinitionNode).trap(function(err){
             if (err) {
                 return callback("createNode() " + err, context);
@@ -1448,11 +1453,19 @@ function writeDefinitionJSONtoDisk(context, callback) {
 }
 
 function buildDefinitionPath(dataFolderPath, node) {
-    return path.normalize(pathResolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "node.json"));
+    if (fs.accessSync(pathResolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "node.json"), fs.constants.R_OK | fs.constants.W_OK)) {
+        return path.normalize(pathResolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "node.json"));
+    }
+
+    return path.normalize(pathResolve(dataFolderPath, "definitions", node._qname.replace(':', OLD_SC_SEPARATOR), "node.json"));
 }
 
 function buildFormPath(dataFolderPath, node, formKey) {
-    return path.normalize(pathResolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "forms", formKey));
+    if (fs.accessSync(pathResolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "forms", formKey), fs.constants.R_OK | fs.constants.W_OK)) {
+        return path.normalize(pathResolve(dataFolderPath, "definitions", node._qname.replace(':', SC_SEPARATOR), "forms", formKey));
+    }
+
+    return path.normalize(pathResolve(dataFolderPath, "definitions", node._qname.replace(':', OLD_SC_SEPARATOR), "forms", formKey));
 }
 
 function cleanNode(node, qnameMod) {
