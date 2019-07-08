@@ -173,7 +173,6 @@ function handleImport() {
             branchId: option_branchId,
             branch: branch,
             allDefinitions: option_allDefinitions,
-            // skipDefinitionValidation: option_skipDefinitionValidation,
             importTypeQNames: option_definitionQNames || [],
             typeDefinitions: [],
             localTypeDefinitions: {},
@@ -276,7 +275,7 @@ function readExistingNodesFromBranch(context, callback) {
     log.info("readExistingNodesFromBranch()");
 
     async.eachSeries(context.nodes, function(node, callback){
-        log.debug("query for existing node. _doc: " + node._source_doc + " _type:" + node._type + " title:\"" + node.title + "\"");
+        log.debug("query for existing node. _type:" + node._type + " title:\"" + node.title + "\"");
         
         if (!node) {
             callback();
@@ -962,7 +961,7 @@ function writeAttachmentsToBranch(context, callback) {
 
     async.each(nodes, function(node, callback){
         async.each(Object.keys(node.attachments || {}), function(attachment, callback){
-            log.debug("adding attachment " + attachment.attachmentId + " to " + node._doc || node._source_doc);
+            log.debug("adding attachment " + attachment.attachmentId + " to " + node._doc);
 
             node.attach(
                 attachment.attachmentId,
@@ -1034,9 +1033,9 @@ function writeNodeToBranch(context, node, callback) {
         // _.extend(node, existingNode);
         util.updateDocumentProperties(existingNode, node);
         
-        if (!existingNode._source_doc) {
-            existingNode._source_doc = node._source_doc || "";
-        }    
+        // if (!existingNode._source_doc) {
+        //     existingNode._source_doc = node._source_doc || "";
+        // }    
         Chain(existingNode).update()
         // .trap(function(err){
         //     callback("writeNodeToBranch() " + err, context);
@@ -1045,9 +1044,9 @@ function writeNodeToBranch(context, node, callback) {
         .reload().then(function(){
             var thisNode = this;
             util.enhanceNode(thisNode);
-            if (!thisNode._source_doc) {
-                thisNode._source_doc = node._source_doc || "";
-            }
+            // if (!thisNode._source_doc) {
+            //     thisNode._source_doc = node._source_doc || "";
+            // }
             log.info("Updated node " + thisNode._doc + " " + thisNode._type + " " + thisNode.title || "");
             if (context.attachmentPaths[node._qname]) {
                 context.attachmentPaths[node._qname].target = thisNode;
@@ -1069,9 +1068,9 @@ function writeNodeToBranch(context, node, callback) {
             thisNode = this;
             log.info("Created node " + thisNode._doc);
             util.enhanceNode(thisNode);
-            if (!thisNode._source_doc) {
-                thisNode._source_doc = node._source_doc || "";
-            }
+            // if (!thisNode._source_doc) {
+            //     thisNode._source_doc = node._source_doc || "";
+            // }
             if (context.attachmentPaths[node._qname]) {
                 context.attachmentPaths[node._qname].target = thisNode;
             }
@@ -1241,6 +1240,11 @@ function writeFormNodeToBranch(context, definitionNode, formNode, callback) {
     else
     {
         // create the form node and association
+        delete formNode._doc;
+        delete formNode._source_doc;
+        delete formNode.__formKey;
+        delete formNode._form_key;
+
         context.branch.createNode(formNode).trap(function(err){
             if (err) {
                 return callback("writeDefinition() could not create form node for form key: " + thisFormKey + " " + err, context);
@@ -1355,6 +1359,8 @@ function writeDefinitionToBranch(context, definitionQname, callback) {
 
         util.updateDocumentProperties(definitionNode, newDefinitionNode);
         
+        delete definitionNode._source_doc;
+        
         definitionNode.update().trap(function(err){
             callback("writeDefinition() " + err, context);
             return;
@@ -1371,6 +1377,9 @@ function writeDefinitionToBranch(context, definitionQname, callback) {
     {
         // create
         log.debug("Creating definition node " + newDefinitionNode._qname + " " + newDefinitionNode.title);
+
+        delete newDefinitionNode._source_doc;
+        delete newDefinitionNode._doc;
 
         context.branch.createNode(newDefinitionNode).trap(function(err){
             if (err) {

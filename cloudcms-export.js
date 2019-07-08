@@ -2,6 +2,7 @@
 /*jshint -W069 */ 
 /*jshint -W104*/ 
 const Gitana = require("gitana");
+const assert = require('assert').strict;
 const fs = require("fs");
 const path = require("path").posix;
 const mime = require('mime-types');
@@ -11,7 +12,6 @@ const commandLineUsage = require('command-line-usage')
 const util = require("./lib/util");
 const writeJsonFile = require('write-json-file');
 const _ = require('underscore');
-const wrench = require("wrench");
 const Logger = require('basic-logger');
 const log = new Logger({
 	showMillis: false,
@@ -295,7 +295,8 @@ function writeContentInstanceJSONtoDisk(nodes, pathPart, context, callback) {
 
     for(var i = 0; i < nodes.length; i++) {
         var node = cleanNode(nodes[i], "");
-        var filePath = path.normalize(path.resolve(context.dataFolderPath, pathPart, node._type.replace(':', SC_SEPARATOR), node._doc || node._source_doc, "node.json"));        
+        assert.ok(node._doc);
+        var filePath = path.normalize(path.resolve(context.dataFolderPath, pathPart, node._type.replace(':', SC_SEPARATOR), node._doc, "node.json"));        
         writeJsonFile.sync(filePath, node);
     }
 
@@ -509,9 +510,9 @@ function cleanNode(node, qnameMod) {
     n = JSON.parse(JSON.stringify(n));
     
     
-    n._source_doc = n._doc;
+    // n._source_doc = n._doc;
     n._qname += qnameMod || "";
-    delete n._doc;
+    // delete n._doc;
     delete n._system;
     delete n.attachments;
     delete n._attachments;
