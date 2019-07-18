@@ -1,8 +1,8 @@
 #!/usr/bin/env node
+
 'use strict';
 var chalk = require('chalk');
 var path = require("path").posix;
-var wrench = require("wrench");
 var writeJsonFile = require('write-json-file');
 var cliArgs = require('command-line-args');
 var option_prompt = require('prompt-sync')({
@@ -12,7 +12,7 @@ var changeCase = require('change-case');
 var randomString = require('random-string-simple');
 var SC_SEPARATOR = "__";
 
-var [,, ... args] = process.argv;
+var [, , ...args] = process.argv;
 var script = args[0] || "";
 process.argv.shift();
 
@@ -126,7 +126,7 @@ function createFormFields(options) {
 }
 
 function writeFields(properties, fields, overwrite) {
-    Object.keys(properties).forEach(function(propertyName) {
+    Object.keys(properties).forEach(function (propertyName) {
 
         var property = properties[propertyName];
 
@@ -179,7 +179,7 @@ function writeFields(properties, fields, overwrite) {
             field.default = "";
             if (property.enum) {
                 field.optionLabels = [];
-                property.enum.forEach(function(value) {
+                property.enum.forEach(function (value) {
                     field.optionLabels.push(value);
                 });
             } else if (propertyName.toLowerCase().includes("body") || propertyName.toLowerCase().includes("copy")) {
@@ -193,12 +193,12 @@ function writeFields(properties, fields, overwrite) {
 }
 
 function pickerConfig(propertyName, property, field) {
-    if (propertyName.toLowerCase().includes("file") 
-    || propertyName.toLowerCase().includes("upload") 
-    || propertyName.toLowerCase().includes("image") 
-    || propertyName.toLowerCase().includes("attachment") 
-    || propertyName.toLowerCase().includes("pdf") 
-    || propertyName.toLowerCase().includes("document")) {
+    if (propertyName.toLowerCase().includes("file") ||
+        propertyName.toLowerCase().includes("upload") ||
+        propertyName.toLowerCase().includes("image") ||
+        propertyName.toLowerCase().includes("attachment") ||
+        propertyName.toLowerCase().includes("pdf") ||
+        propertyName.toLowerCase().includes("document")) {
         field.type = "related-content";
         field.uploadPath = "/images";
         if (property.type === "array") {
@@ -212,7 +212,7 @@ function pickerConfig(propertyName, property, field) {
             typeQName: property.nodeType || "n:node",
             associationType: property.associationType || "a:linked",
             includeChildTypes: true
-        };    
+        };
     }
 }
 
@@ -245,8 +245,7 @@ function emptyNode() {
         "_type": "",
         "type": "object",
         "_parent": "n:node",
-        "properties": {
-        }
+        "properties": {}
     };
 }
 
@@ -258,10 +257,8 @@ function emptyDefinitionNode() {
         "_type": "d:type",
         "type": "object",
         "_parent": "n:node",
-        "properties": {
-        },
-        "mandatoryFeatures": {
-        }
+        "properties": {},
+        "mandatoryFeatures": {}
     };
 }
 
@@ -269,27 +266,64 @@ function emptyFormNode() {
     return {
         "title": "",
         "engineId": "alpaca1",
-        "fields": {
-        },
+        "fields": {},
         "_type": "n:form"
     };
 }
 
 function handleOptions(command) {
-    var options = [
-        {name: 'help', alias: 'h', type: Boolean},
-        {name: 'data-path', alias: 'f', type: String, defaultValue: './data', description: 'data folder path. defaults to ./data'},
-        {name: 'qname', alias: 'q', type: String, description: 'qname'},
-        {name: 'title', alias: 't', type: String, defaultValue: '', description: 'title'},
-        {name: 'description', alias: 'd', type: String, defaultValue: '', description: 'description'},
-        {name: 'id', alias: 'i', type: String, description: 'identifier for a node. must be unique from other nodes in the data/nodes or data/instances folder'}
+    var options = [{
+            name: 'help',
+            alias: 'h',
+            type: Boolean
+        },
+        {
+            name: 'data-path',
+            alias: 'f',
+            type: String,
+            defaultValue: './data',
+            description: 'data folder path. defaults to ./data'
+        },
+        {
+            name: 'qname',
+            alias: 'q',
+            type: String,
+            description: 'qname'
+        },
+        {
+            name: 'title',
+            alias: 't',
+            type: String,
+            defaultValue: '',
+            description: 'title'
+        },
+        {
+            name: 'description',
+            alias: 'd',
+            type: String,
+            defaultValue: '',
+            description: 'description'
+        },
+        {
+            name: 'id',
+            alias: 'i',
+            type: String,
+            description: 'identifier for a node. must be unique from other nodes in the data/nodes or data/instances folder'
+        }
     ];
 
     if (command === 'create-form-fields') {
-        options.push(
-            {name: 'definition-qname', alias: 'q', type: String, description: '_qname of the type definition'},
-            {name: 'overwrite', alias: 'o', type: Boolean, description: 'Overwrite any existing fields in the form'}
-        );
+        options.push({
+            name: 'definition-qname',
+            alias: 'q',
+            type: String,
+            description: '_qname of the type definition'
+        }, {
+            name: 'overwrite',
+            alias: 'o',
+            type: Boolean,
+            description: 'Overwrite any existing fields in the form'
+        });
     }
 
     return cliArgs(options);
