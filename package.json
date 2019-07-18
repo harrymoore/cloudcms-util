@@ -22,6 +22,7 @@
         "klaw-sync": "^6.0.0",
         "load-json-file": "^4.0.0",
         "mime-types": "^2.1.24",
+        "object-path": "^0.11.4",
         "prompt-sync": "^4.1.4",
         "random-string-simple": "^1.0.1",
         "request": "^2.88.0",
