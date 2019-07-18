@@ -315,22 +315,16 @@ function printHelp(optionsList) {
         {
             header: 'Examples',
             content: [{
-                    desc: '\n1. Connect to Cloud CMS and report current node property values',
+                    desc: '\n1. Report current node property values:',
                 },
                 {
                     desc: 'npx cloudcms-util patch --report --csv-source ./patch-test1.csv'
                 },
                 {
-                    desc: '\n2. import definitions and content records by qname:',
+                    desc: '\n2. Apply updates to nodes listed in a CSV:',
                 },
                 {
-                    desc: 'npx cloudcms-util import --definition-qname "test:type1" "test:type2" --include-instances --folder-path ./data'
-                },
-                {
-                    desc: '\n3. import nodes and their related records:',
-                },
-                {
-                    desc: 'npx cloudcms-util import --nodes --include-related --folder-path ./data'
+                    desc: 'npx cloudcms-util patch --overwrite --csv-source ./patch-test1.csv'
                 }
             ]
         }
