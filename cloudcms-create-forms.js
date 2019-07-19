@@ -257,7 +257,7 @@ function readExistingNodesFromBranch(context, callback) {
     log.info("readExistingNodesFromBranch()");
 
     async.eachSeries(context.nodes, function(node, callback){
-        log.debug("query for existing node. _doc: " + node._source_doc + " _type:" + node._type + " title:\"" + node.title + "\"");
+        log.debug("query for existing node. _doc: " + node._doc + " _type:" + node._type + " title:\"" + node.title + "\"");
         
         if (!node) {
             callback();
@@ -843,7 +843,7 @@ function writeAttachmentsToBranch(context, callback) {
 
     async.each(nodes, function(node, callback){
         async.each(Object.keys(node.attachments || {}), function(attachment, callback){
-            log.debug("adding attachment " + attachment.attachmentId + " to " + node._doc || node._source_doc);
+            log.debug("adding attachment " + attachment.attachmentId + " to " + node._doc);
 
             node.attach(
                 attachment.attachmentId,
@@ -905,30 +905,12 @@ function writeNodeToBranch(context, node, callback) {
       }
 
      if (existingNode) {
-        // update unless instructed not to
-        // if (!context.overwriteExistingInstances) {
-        //     log.info("Found instance node but overwrite mode is off so not updating: " + existingNode._doc);
-        //     callback(null, context);
-        //     return;
-        // }
-
-        // _.extend(node, existingNode);
         util.updateDocumentProperties(existingNode, node);
         
-        if (!existingNode._source_doc) {
-            existingNode._source_doc = node._source_doc || "";
-        }    
         Chain(existingNode).update()
-        // .trap(function(err){
-        //     callback("writeNodeToBranch() " + err, context);
-        //     return;
-        // })
         .reload().then(function(){
             var thisNode = this;
             util.enhanceNode(thisNode);
-            if (!thisNode._source_doc) {
-                thisNode._source_doc = node._source_doc || "";
-            }
             log.info("Updated node " + thisNode._doc + " " + thisNode._type + " " + thisNode.title || "");
             if (context.attachmentPaths[node._qname]) {
                 context.attachmentPaths[node._qname].target = thisNode;
@@ -950,9 +932,6 @@ function writeNodeToBranch(context, node, callback) {
             thisNode = this;
             log.info("Created node " + thisNode._doc);
             util.enhanceNode(thisNode);
-            if (!thisNode._source_doc) {
-                thisNode._source_doc = node._source_doc || "";
-            }
             if (context.attachmentPaths[node._qname]) {
                 context.attachmentPaths[node._qname].target = thisNode;
             }
@@ -1098,6 +1077,9 @@ function writeFormNodeToBranch(context, definitionNode, formNode, callback) {
         formNode._type = "n:form";
     }
 
+    delete formNode.__formKey;
+    delete formNode._source_doc;
+
     if (existingFormNodeId) {
         context.branch.readNode(existingFormNodeId).trap(function(err){
             if (err) {
@@ -1233,7 +1215,7 @@ function writeContentInstanceJSONtoDisk(context, callback) {
 }
 
 function buildInstancePath(dataFolderPath, node) {
-    return path.normalize(pathResolve(dataFolderPath, "instances", node._type.replace(':', SC_SEPARATOR), node._source_doc, "node.json"));
+    return path.normalize(pathResolve(dataFolderPath, "instances", node._type.replace(':', SC_SEPARATOR), node._doc, "node.json"));
 }
 
 function getContentInstances(context, callback) {
@@ -1361,9 +1343,8 @@ function cleanNode(node, qnameMod) {
     var n = node;
     util.enhanceNode(n);
     
-    n._source_doc = n._doc;
     n._qname += qnameMod || "";
-    delete n._doc;
+    // delete n._doc;
     delete n._system;
     delete n.attachments;
     delete n.__forms;
