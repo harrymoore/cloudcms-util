@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-/*jshint -W069 */ 
-/*jshint -W104*/ 
+
+/*jshint -W069 */
+/*jshint -W104*/
 const Gitana = require("gitana");
 const assert = require('assert').strict;
 const fs = require("fs");
@@ -13,8 +14,8 @@ const writeJsonFile = require('write-json-file');
 const _ = require('underscore');
 const Logger = require('basic-logger');
 const log = new Logger({
-	showMillis: false,
-	showTimestamp: true
+    showMillis: false,
+    showTimestamp: true
 });
 const SC_SEPARATOR = "__";
 
@@ -86,15 +87,14 @@ return;
 function handleQueryBasedExport() {
     log.debug("handleQueryBasedExport()");
 
-    util.getBranch(gitanaConfig, option_branchId, function(err, branch, platform, stack, domain, primaryDomain, project) {
-        if (err)
-        {
+    util.getBranch(gitanaConfig, option_branchId, function (err, branch, platform, stack, domain, primaryDomain, project) {
+        if (err) {
             log.debug("Error connecting to Cloud CMS branch: " + err);
             return;
         }
 
         log.info("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc);
-        
+
         var context = {
             branchId: option_branchId,
             branch: branch,
@@ -112,36 +112,34 @@ function handleQueryBasedExport() {
 
         async.waterfall([
             async.apply(getNodesFromQuery, context),
-            async.ensureAsync(async.apply(getRelated, context.nodes)),
-            async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
-            async.ensureAsync(async.apply(downloadAttachments, context.nodes, "nodes")),
-            async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.nodes, "nodes")),
+                async.ensureAsync(async.apply(getRelated, context.nodes)),
+                    async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
+                        async.ensureAsync(async.apply(downloadAttachments, context.nodes, "nodes")),
+                            async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.nodes, "nodes")),
         ], function (err, context) {
-            if(err)
-            {
+            if (err) {
                 log.error("Error exporting: " + err);
                 return;
             }
-            
+
             log.info("Export complete");
             return;
-        });        
-        
+        });
+
     });
 }
 
 function handleExport() {
     log.debug("handleExport()");
 
-    util.getBranch(gitanaConfig, option_branchId, function(err, branch, platform, stack, domain, primaryDomain, project) {
-        if (err)
-        {
+    util.getBranch(gitanaConfig, option_branchId, function (err, branch, platform, stack, domain, primaryDomain, project) {
+        if (err) {
             log.debug("Error connecting to Cloud CMS branch: " + err);
             return;
         }
 
         log.info("connected to project: \"" + project.title + "\" and branch: \"" + (branch.title || branch._doc) + "\"");
-        
+
         var context = {
             branchId: option_branchId,
             branch: branch,
@@ -160,27 +158,26 @@ function handleExport() {
 
         async.waterfall([
             async.apply(getDefinitions, context),
-            async.ensureAsync(getDefinitionFormAssociations),
-            async.ensureAsync(getDefinitionForms),
-            async.ensureAsync(writeDefinitionJSONtoDisk),
-            async.ensureAsync(getContentInstances),
-            async.ensureAsync(async.apply(getRelated, context.instanceNodes)),
-            async.ensureAsync(async.apply(downloadAttachments, context.instanceNodes, "instances")),
-            async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
-            async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.instanceNodes, "instances"))
+                async.ensureAsync(getDefinitionFormAssociations),
+                    async.ensureAsync(getDefinitionForms),
+                        async.ensureAsync(writeDefinitionJSONtoDisk),
+                            async.ensureAsync(getContentInstances),
+                                async.ensureAsync(async.apply(getRelated, context.instanceNodes)),
+                                    async.ensureAsync(async.apply(downloadAttachments, context.instanceNodes, "instances")),
+                                        async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
+                                            async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.instanceNodes, "instances"))
         ], function (err, context) {
-            if(err)
-            {
+            if (err) {
                 log.error("Error exporting: " + err);
                 return;
             }
 
             // log.debug(JSON.stringify(context.typeDefinitions, null, 2));
-            
+
             log.info("Export complete");
             return;
-        });        
-        
+        });
+
     });
 }
 
@@ -191,14 +188,14 @@ function getNodesFromQuery(context, callback) {
     var nodes = context.nodes;
     var queryPageSize = context.queryPageSize || 100;
 
-    context.branch.queryNodes(query,{
+    context.branch.queryNodes(query, {
         limit: queryPageSize,
         paths: true
-    }).each(function() {
+    }).each(function () {
         var node = this;
         util.enhanceNode(node);
         nodes.push(node);
-    }).then(function() {
+    }).then(function () {
         callback(null, context);
     });
 }
@@ -219,35 +216,37 @@ function downloadAttachments(list, pathPart, context, callback) {
         list = newList;
     }
 
-    async.eachSeries(list, async.apply(downloadNodeAttachments, context, pathPart), function (err) {
-        if(err)
-        {
-            log.error("Error reading attachments: " + err);
-            callback(err);
+    async.eachSeries(list, async.apply(downloadNodeAttachments, context, pathPart),
+        function (err) {
+            if (err) {
+                log.error("Error reading attachments: " + err);
+                callback(err);
+                return;
+            }
+
+            log.debug("done downloading node attachments");
+            callback(null, context);
             return;
-        }
-        
-        log.debug("done downloading node attachments");
-        callback(null, context);
-        return;
-    });        
+        });
 }
 
 function downloadNodeAttachments(context, pathPart, node, callback) {
     log.debug("downloadNodeAttachments()");
 
-    async.eachSeries(_.filter(_.keys(node.attachments), function(k){return !k.match(/^_preview_/)}), async.apply(downloadAttachment, context, node, pathPart), function (err) {
-        if(err)
-        {
-            log.error("Error reading attachments: " + err);
-            callback(err);
+    async.eachSeries(_.filter(_.keys(node.attachments), function (k) {
+        return !k.match(/^_preview_/)
+    }), async.apply(downloadAttachment, context, node, pathPart),
+        function (err) {
+            if (err) {
+                log.error("Error reading attachments: " + err);
+                callback(err);
+                return;
+            }
+
+            log.debug("downloaded node attachments");
+            callback(null, context);
             return;
-        }
-        
-        log.debug("downloaded node attachments");
-        callback(null, context);
-        return;
-    });        
+        });
 }
 
 function downloadAttachment(context, node, pathPart, attachmentId, callback) {
@@ -271,7 +270,7 @@ function downloadAttachment(context, node, pathPart, attachmentId, callback) {
     var filePath = attachmentPath + path.sep + filename;
     log.debug("file path: " + filePath);
 
-    util.downloadNode(context.platform, filePath, context.branch.getRepositoryId(), context.branchId, node._doc, attachmentId, function(err){
+    util.downloadNode(context.platform, filePath, context.branch.getRepositoryId(), context.branchId, node._doc, attachmentId, function (err) {
         callback();
     });
 }
@@ -280,7 +279,7 @@ function writeContentInstanceJSONtoDisk(nodes, pathPart, context, callback) {
     log.debug("writeContentInstanceJSONtoDisk()");
 
     var dataFolderPath = path.normalize(context.dataFolderPath);
-    
+
     if (!Gitana.isArray(nodes)) {
         // flatten to an array if list is an associative array of sub lists (by type)
         var newList = [];
@@ -294,16 +293,16 @@ function writeContentInstanceJSONtoDisk(nodes, pathPart, context, callback) {
         nodes = newList;
     }
 
-    for(var i = 0; i < nodes.length; i++) {
+    for (var i = 0; i < nodes.length; i++) {
         var node = cleanNode(nodes[i], "");
         assert.ok(node._doc);
-        var filePath = path.normalize(path.resolve(context.dataFolderPath, pathPart, node._type.replace(':', SC_SEPARATOR), node._doc, "node.json"));        
+        var filePath = path.normalize(path.resolve(context.dataFolderPath, pathPart, node._type.replace(':', SC_SEPARATOR), node._doc, "node.json"));
         writeJsonFile.sync(filePath, node);
     }
 
     // write related nodes
     var relatedNodes = context.relatedNodes;
-    _.map(relatedNodes, function(v, k){
+    _.map(relatedNodes, function (v, k) {
         var node = cleanNode(v, "");
         writeJsonFile.sync(buildRelatedPath(dataFolderPath, node), node);
     });
@@ -332,7 +331,7 @@ function getRelated(list, context, callback) {
     var instances = JSON.parse(JSON.stringify(instanceNodes));
     var related = util.findKeyValues(instances, "ref", []);
     var relatedIds = {};
-    for(var i = 0; i < related.length; i++) {
+    for (var i = 0; i < related.length; i++) {
         var id = related[i].split('/')[5];
         relatedIds[id] = id;
     }
@@ -351,14 +350,14 @@ function getRelated(list, context, callback) {
         }
     };
 
-    context.branch.queryNodes(query,{
+    context.branch.queryNodes(query, {
         limit: -1,
         paths: true
-    }).each(function() {
+    }).each(function () {
         var node = this;
         util.enhanceNode(node);
         context.relatedNodes.push(node);
-    }).then(function() {
+    }).then(function () {
         // log.debug("related nodes: " + JSON.stringify(context.relatedNodes, null, 2));
         callback(null, context);
     });
@@ -379,18 +378,18 @@ function getContentInstances(context, callback) {
         return;
     }
 
-    async.eachSeries(typeDefinitions, async.apply(getDefinitionInstances, context), function (err) {
-        if(err)
-        {
-            log.error("Error reading content instances: " + err);
-            callback(err);
+    async.eachSeries(typeDefinitions, async.apply(getDefinitionInstances, context),
+        function (err) {
+            if (err) {
+                log.error("Error reading content instances: " + err);
+                callback(err);
+                return;
+            }
+
+            log.debug("loaded definition instances");
+            callback(null, context);
             return;
-        }
-        
-        log.debug("loaded definition instances");
-        callback(null, context);
-        return;
-    });        
+        });
 }
 
 function getDefinitionInstances(context, typeDefinitionNode, callback) {
@@ -404,14 +403,14 @@ function getDefinitionInstances(context, typeDefinitionNode, callback) {
         context.instanceNodes[typeDefinitionNode._qname] = [];
     }
 
-    context.branch.queryNodes(query,{
+    context.branch.queryNodes(query, {
         limit: -1,
         paths: true
-    }).each(function() {
+    }).each(function () {
         var instance = this;
         util.enhanceNode(instance);
         context.instanceNodes[typeDefinitionNode._qname].push(instance);
-    }).then(function() {
+    }).then(function () {
         // log.debug("instances: " + JSON.stringify(context.instanceNodes, null, 2));
         log.debug("instances count: " + context.instanceNodes.length);
         callback(null, context);
@@ -420,10 +419,9 @@ function getDefinitionInstances(context, typeDefinitionNode, callback) {
 
 function handleListTypes() {
     log.debug("handleListTypes()");
-    
-    util.getBranch(gitanaConfig, option_branchId, function(err, branch, platform, stack, domain, primaryDomain) {
-        if (err)
-        {
+
+    util.getBranch(gitanaConfig, option_branchId, function (err, branch, platform, stack, domain, primaryDomain) {
+        if (err) {
             log.debug("Error connecting to Cloud CMS branch: " + err);
             return;
         }
@@ -435,20 +433,19 @@ function handleListTypes() {
             branch: branch,
             typeDefinitions: []
         };
-        
-        getDefinitions(context, function(err, context) {
-            if (err)
-            {
+
+        getDefinitions(context, function (err, context) {
+            if (err) {
                 log.error("Error listing definition nodes " + err);
                 return;
             }
 
-            Object.keys(context.typeDefinitions).forEach(function(type) {
+            Object.keys(context.typeDefinitions).forEach(function (type) {
                 log.debug(JSON.stringify(context.typeDefinitions[type]));
                 console.log("type: " + context.typeDefinitions[type]._type + "\t_qname: " + context.typeDefinitions[type]._qname + "\tTitle: \"" + context.typeDefinitions[type].title + "\"");
             });
 
-            console.log("\ndone");            
+            console.log("\ndone");
         });
     });
 }
@@ -460,7 +457,7 @@ function writeDefinitionJSONtoDisk(context, callback) {
 
     dataFolderPath = path.normalize(dataFolderPath)
     if (fs.existsSync(dataFolderPath)) {
-        Object.keys(typeDefinitions).forEach(function(typeId) {
+        Object.keys(typeDefinitions).forEach(function (typeId) {
             log.debug(JSON.stringify(typeDefinitions[typeId]));
             writeFormJsontoDisk(dataFolderPath, typeDefinitions[typeId]);
             var node = cleanNode(typeDefinitions[typeId]);
@@ -470,9 +467,7 @@ function writeDefinitionJSONtoDisk(context, callback) {
         console.log('done');
         callback(null, context);
         return;
-    }
-    else
-    {
+    } else {
         callback("folder path not found: " + dataFolderPath);
         return;
     }
@@ -482,16 +477,16 @@ function writeFormJsontoDisk(dataFolderPath, node) {
     if (!node.__forms) {
         return;
     }
-    
-    for(var i = 0; i < node.__formAssociations.length; i++) {
+
+    for (var i = 0; i < node.__formAssociations.length; i++) {
         var formAssociation = node.__formAssociations[i];
         var forms = node.__forms;
         var formKey = formAssociation["form-key"];
-        for(var j = 0; j < forms.length; j++) {
+        for (var j = 0; j < forms.length; j++) {
             var form = node.__forms[j];
             if (form._doc == formAssociation.target) {
                 var formNode = cleanNode(form, formKey);
-                writeJsonFile.sync(buildDefinitionFormPath(dataFolderPath, node, formKey), formNode);                    
+                writeJsonFile.sync(buildDefinitionFormPath(dataFolderPath, node, formKey), formNode);
             }
         }
     }
@@ -509,8 +504,8 @@ function cleanNode(node, qnameMod) {
     var n = node;
     util.enhanceNode(n);
     n = JSON.parse(JSON.stringify(n));
-    
-    
+
+
     // n._source_doc = n._doc;
     n._qname += qnameMod || "";
     // delete n._doc;
@@ -519,7 +514,7 @@ function cleanNode(node, qnameMod) {
     delete n._attachments;
     delete n.__forms;
     delete n.__formAssociations;
-    
+
     return n;
 }
 
@@ -541,8 +536,8 @@ function getDefinitions(context, callback) {
         _type: {
             "$in": ["d:type", "d:association", "d:feature"]
         },
-        systemBootstrapped: { 
-            $exists: false 
+        systemBootstrapped: {
+            $exists: false
         }
     }
 
@@ -552,17 +547,17 @@ function getDefinitions(context, callback) {
         };
     }
 
-    context.branch.queryNodes(query,{
+    context.branch.queryNodes(query, {
         limit: -1,
         sort: {
             _type: 1,
             title: 1
         }
-    }).each(function() {
+    }).each(function () {
         var definition = this;
         util.enhanceNode(definition);
         context.typeDefinitions.push(definition);
-    }).then(function() {
+    }).then(function () {
         log.debug("definitions: " + JSON.stringify(context.typeDefinitions, null, 2));
         callback(null, context);
     });
@@ -571,11 +566,11 @@ function getDefinitions(context, callback) {
 function readDefinition(context, callback) {
     log.debug("readDefinition()");
 
-    context.branch.readDefinition().each(function() {
+    context.branch.readDefinition().each(function () {
         var definition = this;
         util.enhanceNode(definition);
         context.typeDefinitions.push(definition);
-    }).then(function() {
+    }).then(function () {
         log.debug("definitions: " + JSON.stringify(context.typeDefinitions, null, 2));
         callback(null, context);
     });
@@ -592,17 +587,16 @@ function getDefinitionForms(context, callback) {
     }
 
     async.eachSeries(typeDefinitions, getDefinitionFormList, function (err) {
-        if(err)
-        {
+        if (err) {
             log.error("Error reading definition forms: " + err);
             callback(err);
             return;
         }
-        
+
         log.debug("loaded definition forms");
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function getDefinitionFormAssociations(context, callback) {
@@ -616,17 +610,16 @@ function getDefinitionFormAssociations(context, callback) {
     }
 
     async.eachSeries(typeDefinitions, getDefinitionFormAssociationList, function (err) {
-        if(err)
-        {
+        if (err) {
             log.error("Error reading definition form associations: " + err);
             callback(err);
             return;
         }
-        
+
         log.debug("loaded definition form associations");
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function getDefinitionFormList(typeDefinitionNode, callback) {
@@ -635,7 +628,7 @@ function getDefinitionFormList(typeDefinitionNode, callback) {
     typeDefinitionNode.listRelatives({
         "type": "a:has_form",
         "direction": "OUTGOING"
-    }).then(function() {
+    }).then(function () {
         log.debug("relatives: " + JSON.stringify(this, null, 2));
         typeDefinitionNode.__forms = this.asArray();
         callback();
@@ -648,7 +641,7 @@ function getDefinitionFormAssociationList(typeDefinitionNode, callback) {
     typeDefinitionNode.associations({
         "type": "a:has_form",
         "direction": "OUTGOING"
-    }).then(function() {
+    }).then(function () {
         log.debug("associations: " + JSON.stringify(this, null, 2));
         typeDefinitionNode.__formAssociations = this.asArray();
         callback();
@@ -656,20 +649,84 @@ function getDefinitionFormAssociationList(typeDefinitionNode, callback) {
 }
 
 function getOptions() {
-    return [
-        {name: 'help', alias: 'h', type: Boolean},
-        {name: 'verbose', alias: 'v', type: Boolean, description: 'verbose logging'},
-        {name: 'prompt', alias: 'p', type: Boolean, description: 'prompt for username and password. overrides gitana.json credentials'},
-        {name: 'use-credentials-file', alias: 'c', type: Boolean, description: 'use credentials file ~/.cloudcms/credentials.json. overrides gitana.json credentials'},
-        {name: 'gitana-file-path', alias: 'g', type: String, description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json'},
-        {name: 'branch', alias: 'b', type: String, description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"'},
-        {name: 'list-types', alias: 'l', type: Boolean, description: 'list type definitions available in the branch'},
-        {name: 'definition-qname', alias: 'q', type: String, multiple: true, description: '_qname of the type definition. Or use --all-definitions'},
-        {name: 'all-definitions', alias: 'a', type: Boolean, description: 'export all definitions. Or use --definition-qname'},
-        {name: 'include-instances', alias: 'i', type: Boolean, description: 'include instance records for conent type definitions'},
-        {name: 'include-related', alias: 'r', type: Boolean, description: 'include instance records referred to in relators on instance records'},
-        {name: 'folder-path', alias: 'f', type: String, description: 'folder to store exported files. defaults to ./data'},
-        {name: 'query-file-path', alias: 'y', type: String, description: 'path to a json file defining the query'}
+    return [{
+            name: 'help',
+            alias: 'h',
+            type: Boolean
+        },
+        {
+            name: 'verbose',
+            alias: 'v',
+            type: Boolean,
+            description: 'verbose logging'
+        },
+        {
+            name: 'prompt',
+            alias: 'p',
+            type: Boolean,
+            description: 'prompt for username and password. overrides gitana.json credentials'
+        },
+        {
+            name: 'use-credentials-file',
+            alias: 'c',
+            type: Boolean,
+            description: 'use credentials file ~/.cloudcms/credentials.json. overrides gitana.json credentials'
+        },
+        {
+            name: 'gitana-file-path',
+            alias: 'g',
+            type: String,
+            description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json'
+        },
+        {
+            name: 'branch',
+            alias: 'b',
+            type: String,
+            description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"'
+        },
+        {
+            name: 'list-types',
+            alias: 'l',
+            type: Boolean,
+            description: 'list type definitions available in the branch'
+        },
+        {
+            name: 'definition-qname',
+            alias: 'q',
+            type: String,
+            multiple: true,
+            description: '_qname of the type definition. Or use --all-definitions'
+        },
+        {
+            name: 'all-definitions',
+            alias: 'a',
+            type: Boolean,
+            description: 'export all definitions. Or use --definition-qname'
+        },
+        {
+            name: 'include-instances',
+            alias: 'i',
+            type: Boolean,
+            description: 'include instance records for conent type definitions'
+        },
+        {
+            name: 'include-related',
+            alias: 'r',
+            type: Boolean,
+            description: 'include instance records referred to in relators on instance records'
+        },
+        {
+            name: 'folder-path',
+            alias: 'f',
+            type: String,
+            description: 'folder to store exported files. defaults to ./data'
+        },
+        {
+            name: 'query-file-path',
+            alias: 'y',
+            type: String,
+            description: 'path to a json file defining the query'
+        }
     ];
 }
 
@@ -677,8 +734,7 @@ function handleOptions() {
 
     var options = cliArgs(getOptions());
 
-    if (options.help)
-    {
+    if (options.help) {
         printHelp(getOptions());
         return null;
     }
@@ -687,8 +743,7 @@ function handleOptions() {
 }
 
 function printHelp(optionsList) {
-    console.log(commandLineUsage([
-        {
+    console.log(commandLineUsage([{
             header: 'Cloud CMS Export',
             content: 'Export defintions and content instance records from a Cloud CMS project branch.'
         },
@@ -698,8 +753,7 @@ function printHelp(optionsList) {
         },
         {
             header: 'Examples',
-            content: [
-                {
+            content: [{
                     desc: '\n1. connect to Cloud CMS and list available definition qnames',
                 },
                 {

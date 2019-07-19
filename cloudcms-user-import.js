@@ -122,10 +122,10 @@ function handleCsvUsers() {
 
         async.waterfall([
             async.ensureAsync(async.apply(parseCsv, context)),
-            async.ensureAsync(queryExistingUsers),
-            async.ensureAsync(createMissingUsers),
-            async.ensureAsync(addUsersToProject),
-            async.ensureAsync(addUsersToProjectTeam)
+                async.ensureAsync(queryExistingUsers),
+                    async.ensureAsync(createMissingUsers),
+                        async.ensureAsync(addUsersToProject),
+                            async.ensureAsync(addUsersToProjectTeam)
         ], function (err, context) {
             if (err) {
                 log.error("Error importing: " + err);
@@ -196,7 +196,7 @@ function parseCsv(context, callback) {
 
     csv({
         noheader: false,
-        headers: ['name','email','firstName','lastName','companyName','password']
+        headers: ['name', 'email', 'firstName', 'lastName', 'companyName', 'password']
     }).fromFile(option_csvSource).then(function (data) {
         context.usersToImport = data;
         log.info("usersToImport: " + JSON.stringify(context.usersToImport, null, 2));
@@ -250,7 +250,7 @@ function createMissingUsers(context, callback) {
             var node = this;
             context.existingUsersByName[node.name] = node;
             context.existingUsers.push(node);
-            log.info("Created user node " + node._doc + " for \"" + user.name + "\"");    
+            log.info("Created user node " + node._doc + " for \"" + user.name + "\"");
             callback();
         });
     }, function () {
@@ -280,7 +280,8 @@ function addUsersToProject(context, callback) {
                 log.info("Added user " + user.name + " " + user._doc + " to the project");
                 callback(null, context);
             });
-        }, function (err) {
+        },
+        function (err) {
             callback(null, context);
         }
     );

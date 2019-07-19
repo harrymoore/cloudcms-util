@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-/*jshint -W069 */ 
-/*jshint -W104*/ 
+
+/*jshint -W069 */
+/*jshint -W104*/
 const Gitana = require("gitana");
 const fs = require("fs");
 const path = require("path");
@@ -11,11 +12,10 @@ const commandLineUsage = require('command-line-usage')
 const util = require("./lib/util");
 const writeJsonFile = require('write-json-file');
 const _ = require('underscore');
-const wrench = require("wrench");
 const Logger = require('basic-logger');
 const log = new Logger({
-	showMillis: false,
-	showTimestamp: true
+    showMillis: false,
+    showTimestamp: true
 });
 
 // debug only when using charles proxy ssl proxy when intercepting cloudcms api calls:
@@ -78,9 +78,8 @@ return;
 function handleUsers() {
     log.debug("handleUsers()");
 
-    util.getBranch(gitanaConfig, "master", function(err, branch, platform, stack, domain, primaryDomain, project) {
-        if (err)
-        {
+    util.getBranch(gitanaConfig, "master", function (err, branch, platform, stack, domain, primaryDomain, project) {
+        if (err) {
             log.debug("Error connecting to Cloud CMS: " + err);
             return;
         }
@@ -111,27 +110,26 @@ function handleUsers() {
 
         async.waterfall([
             async.apply(listDomainUsers, context),
-            async.ensureAsync(async.apply(writeNodesJSONtoDisk, "users")),
+                async.ensureAsync(async.apply(writeNodesJSONtoDisk, "users")),
         ], function (err, context) {
-            if(err)
-            {
+            if (err) {
                 log.error("Error exporting: " + err);
                 return;
             }
-            
+
             log.info("Export complete");
             return;
-        });        
-        
+        });
+
     });
 }
 
 function listDomainUsers(context, callback) {
     log.debug("listDomainUsers()");
 
-    context.primaryDomain.listPrincipals().then(function() {
+    context.primaryDomain.listPrincipals().then(function () {
         // console.log( JSON.stringify( this.asArray(),null,2) );
-        context.nodes = _.filter(this.asArray(), function(node){ 
+        context.nodes = _.filter(this.asArray(), function (node) {
             return !node.name.startsWith("appuser-");
         });
         callback(null, context);
@@ -143,11 +141,11 @@ function queryUsers(context, callback) {
 
     var query = context.query;
 
-    context.primaryDomain.queryUsers(query,{
+    context.primaryDomain.queryUsers(query, {
         limit: -1
-    }).then(function() {
+    }).then(function () {
         // console.log( JSON.stringify( this.asArray(),null,2) );
-        context.nodes = _.filter(this.asArray(), function(node){ 
+        context.nodes = _.filter(this.asArray(), function (node) {
             return !node.name.startsWith("appuser-");
         });
         callback(null, context);
@@ -160,9 +158,9 @@ function writeNodesJSONtoDisk(pathPart, context, callback) {
     var dataFolderPath = path.posix.normalize(context.dataFolderPath);
     var nodes = context.nodes;
 
-    for(var i = 0; i < nodes.length; i++) {
+    for (var i = 0; i < nodes.length; i++) {
         var node = cleanNode(nodes[i], "");
-        var filePath = path.normalize(path.posix.resolve(context.dataFolderPath, pathPart, node.name, "node.json"));        
+        var filePath = path.normalize(path.posix.resolve(context.dataFolderPath, pathPart, node.name, "node.json"));
         writeJsonFile.sync(filePath, node);
     }
 
@@ -173,13 +171,13 @@ function cleanNode(node, qnameMod) {
     var n = node;
     util.enhanceNode(n);
     n = JSON.parse(JSON.stringify(n));
-    
+
     // n._source_doc = n._doc;
     delete n._doc;
     delete n.directoryId;
     delete n.identityId;
     delete n.domainId;
-    
+
     return n;
 }
 
@@ -189,16 +187,59 @@ function logContext(context, callback) {
 }
 
 function getOptions() {
-    return [
-        {name: 'help', alias: 'h', type: Boolean},
-        {name: 'verbose', alias: 'v', type: Boolean, description: 'verbose logging'},
-        {name: 'prompt', alias: 'p', type: Boolean, description: 'prompt for username and password. overrides gitana.json credentials'},
-        {name: 'use-credentials-file', alias: 'c', type: Boolean, description: 'use credentials file ~/.cloudcms/credentials.json. overrides gitana.json credentials'},
-        {name: 'gitana-file-path', alias: 'g', type: String, description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json'},
-        {name: 'folder-path', alias: 'f', type: String, description: 'folder to store exported files. defaults to ./data'},
-        {name: 'all-users', alias: 'a', type: Boolean, description: 'export all users. Or use --query-file-path'},
-        {name: 'domain-id', alias: 'd', type: String, description: 'id of the domain to query. defaults to "primary"'},
-        {name: 'query-file-path', alias: 'y', type: String, description: 'path to a json file defining the query. required unless --all-users is specified'}
+    return [{
+            name: 'help',
+            alias: 'h',
+            type: Boolean
+        },
+        {
+            name: 'verbose',
+            alias: 'v',
+            type: Boolean,
+            description: 'verbose logging'
+        },
+        {
+            name: 'prompt',
+            alias: 'p',
+            type: Boolean,
+            description: 'prompt for username and password. overrides gitana.json credentials'
+        },
+        {
+            name: 'use-credentials-file',
+            alias: 'c',
+            type: Boolean,
+            description: 'use credentials file ~/.cloudcms/credentials.json. overrides gitana.json credentials'
+        },
+        {
+            name: 'gitana-file-path',
+            alias: 'g',
+            type: String,
+            description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json'
+        },
+        {
+            name: 'folder-path',
+            alias: 'f',
+            type: String,
+            description: 'folder to store exported files. defaults to ./data'
+        },
+        {
+            name: 'all-users',
+            alias: 'a',
+            type: Boolean,
+            description: 'export all users. Or use --query-file-path'
+        },
+        {
+            name: 'domain-id',
+            alias: 'd',
+            type: String,
+            description: 'id of the domain to query. defaults to "primary"'
+        },
+        {
+            name: 'query-file-path',
+            alias: 'y',
+            type: String,
+            description: 'path to a json file defining the query. required unless --all-users is specified'
+        }
     ];
 }
 
@@ -206,8 +247,7 @@ function handleOptions() {
 
     var options = cliArgs(getOptions());
 
-    if (options.help)
-    {
+    if (options.help) {
         printHelp(getOptions());
         return null;
     }
@@ -216,8 +256,7 @@ function handleOptions() {
 }
 
 function printHelp(optionsList) {
-    console.log(commandLineUsage([
-        {
+    console.log(commandLineUsage([{
             header: 'Cloud CMS Export',
             content: 'Export user accounts from a Cloud CMS domain.'
         },
@@ -227,8 +266,7 @@ function printHelp(optionsList) {
         },
         {
             header: 'Examples',
-            content: [
-                {
+            content: [{
                     desc: '1. Export all user accounts:',
                 },
                 {
