@@ -3,6 +3,7 @@
 'use strict';
 var chalk = require('chalk');
 var path = require("path").posix;
+var fs = require("fs");
 var writeJsonFile = require('write-json-file');
 var cliArgs = require('command-line-args');
 var option_prompt = require('prompt-sync')({
@@ -67,10 +68,21 @@ function init(options) {
 
     var normalizedDataPath = path.resolve(process.cwd(), path.normalize(dataPath));
     if (dataPath) {
-        wrench.mkdirSyncRecursive(path.resolve(normalizedDataPath, 'nodes'));
-        wrench.mkdirSyncRecursive(path.resolve(normalizedDataPath, 'instances'));
-        wrench.mkdirSyncRecursive(path.resolve(normalizedDataPath, 'definitions'));
-        wrench.mkdirSyncRecursive(path.resolve(normalizedDataPath, 'related'));
+        fs.mkdirSync(path.resolve(normalizedDataPath, 'nodes'), {
+            recursive: true
+        });
+
+        fs.mkdirSync(path.resolve(normalizedDataPath, 'instances'), {
+            recursive: true
+        });
+
+        fs.mkdirSync(path.resolve(normalizedDataPath, 'definitions'), {
+            recursive: true
+        });
+
+        fs.mkdirSync(path.resolve(normalizedDataPath, 'related'), {
+            recursive: true
+        });
     } else {
         console.log(chalk.red("bad path: " + dataPath));
     }
@@ -94,14 +106,18 @@ function createDefinition(options) {
 
     defPath = path.resolve(defPath, node._qname.replace(':', SC_SEPARATOR));
 
-    wrench.mkdirSyncRecursive(defPath);
+    fs.mkdirSync(defPath, {
+        recursive: true
+    });
     writeJsonFile.sync(path.resolve(defPath, "node.json"), node);
 
     var formNode = emptyFormNode();
     formNode.title = node.title;
     formNode.description = node.description;
 
-    wrench.mkdirSyncRecursive(path.resolve(defPath, "forms"));
+    fs.mkdirSync(path.resolve(defPath, "forms"), {
+        recursive: true
+    });
     writeJsonFile.sync(path.resolve(defPath, "forms", "master.json"), formNode);
 }
 
@@ -235,10 +251,16 @@ function createNode(options, instanceNode) {
         defPath = path.resolve(paths.nodes, node._type.replace(':', SC_SEPARATOR), id || randomString(10, 'abcdefghijklmnopqrstuv0123456789'));
     }
 
-    wrench.mkdirSyncRecursive(defPath);
+    fs.mkdirSync(defPath, {
+        recursive: true
+    });
+
     writeJsonFile.sync(path.resolve(defPath, "node.json"), node);
 
-    wrench.mkdirSyncRecursive(path.resolve(defPath, "attachments"));
+    fs.mkdirSync(path.resolve(defPath, "attachments"), {
+        recursive: true
+    });
+
 }
 
 function emptyNode() {
