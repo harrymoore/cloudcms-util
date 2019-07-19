@@ -5,7 +5,6 @@ const Gitana = require("gitana");
 const assert = require('assert').strict;
 const fs = require("fs");
 const path = require("path").posix;
-const mime = require('mime-types');
 const async = require("async");
 const cliArgs = require('command-line-args');
 const commandLineUsage = require('command-line-usage')
@@ -255,7 +254,9 @@ function downloadAttachment(context, node, pathPart, attachmentId, callback) {
     log.debug("downloadAttachment()");
 
     var attachmentPath = path.normalize(path.resolve(context.dataFolderPath, pathPart, node._type.replace(':', SC_SEPARATOR), node._doc, "attachments"));
-    wrench.mkdirSyncRecursive(path.normalize(attachmentPath));
+    fs.mkdirSync(path.normalize(attachmentPath), {
+        recursive: true
+    });
 
     var filename = attachmentId;
     if (node.title) {
