@@ -32,6 +32,9 @@ if (script === "import") {
 } else if (script === "patch-nodes") {
     require('../cloudcms-patch');
     return;
+} else if (script === "mm-patch-nodes") {
+    require('../cloudcms-patch-mm');
+    return;
 } else if (script === "init") {
     init(handleOptions(script));
     return;
