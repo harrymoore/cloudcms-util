@@ -264,15 +264,15 @@ function patchNodes(context, callback) {
     var patches = [];
 
     _.each(context.nodes, function (node, index, list) {
-        var value = objectPath.get(node, context.inputNodesById[node._doc].property_path);
+        var value = objectPath.get(node, context.propertyPath);
         if (!value || context.overwrite) {
             // patch this node
             patches.push({
                 node: node,
                 patch: {
                     op: Gitana.isUndefined(value) ? "add" : "replace",
-                    path: "/" + context.inputNodesById[node._doc][context.propertyPath].split(".").join("/"),
-                    value: context.inputNodesById[node._doc].property_value
+                    path: "/" + context.propertyPath.split(".").join("/"),
+                    value: context.inputNodesById[node._doc][context.propertyPath] || ""
                 }
             });
         }
