@@ -241,12 +241,8 @@ function reportNodes(context, callback) {
     }
 
     log.info("report:");
-    _.each(context.nodes, function (element, index, list) {
-        if (context.inputNodesById[element._doc][context.propertyPath]) {
-            console.log(element._doc + " " + (context.inputNodesById[element._doc][context.propertyPath] || "") + ": " + objectPath.get(element, context.inputNodesById[element._doc][context.propertyPath], ""));
-        } else {
-            console.log(element._doc);
-        }
+    _.each(context.nodes, function (node, index, list) {
+        console.log(node._doc + ": " + (node[context.propertyPath] || ""));
     });
 
     callback(null, context);

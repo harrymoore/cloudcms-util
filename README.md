@@ -9,6 +9,7 @@ Not to be confused with the official Cloud CMS CLI (https://www.npmjs.com/packag
 It is not necessary to install cloudcms-util. It runs as an npx script. But it will run faster if it installed first (otherwise npx will install it on demand and remove it when it finishes executing each command).
 
 ## Install:
+It is not necessary to install this utility as it will run as an npx script. But you can install it to so it runs withouth first downloading:
     npm install -g cloudcms-util
 
 ## Help:
@@ -52,3 +53,13 @@ Example:
 NAME,EMAIL,FIRST,LAST,COMPANY,PASSWORD
 mary,mary.user1@email.com,Marry,User1,this company,
 edith,edith.m.user2@anotheremail.com,Edith,User2,,Hello$World.1
+
+## Apply bulk property updates
+```
+npx cloudcms-util patch-nodes -g ./gitana/gitana-local-docker-test-proxy.json --csv-source ./data/patch-test1.csv --overwrite -v
+```
+
+## MM Apply bulk property updates
+```
+npx cloudcms-util mm-patch-nodes -g ./gitana/gitana-local-docker-test-proxy.json --xlsx-source ./data/patch-test2.xlsx --tab-label "Studio M" --property-path altText  --overwrite -v
+```
