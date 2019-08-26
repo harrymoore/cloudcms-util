@@ -217,6 +217,8 @@ function queryNodes(context, callback) {
         _doc: {
             "$in": context.csvNodeIds
         }
+    },{
+        limit: -1
     }).then(function () {
         if (this.size() === 0) {
             log.warn("No nodes found");
@@ -276,7 +278,7 @@ function patchNodes(context, callback) {
 
     log.debug("Patches: " + JSON.stringify(patches, null, 2));
 
-    async.each(patches, function (patch, callback) {
+    async.eachSeries(patches, function (patch, callback) {
         Chain(patch.node).patch([patch.patch]).then(callback);
     }, function (err) {
         // completed pathes
