@@ -279,7 +279,10 @@ function patchNodes(context, callback) {
     log.debug("Patches: " + JSON.stringify(patches, null, 2));
 
     async.eachSeries(patches, function (patch, callback) {
-        Chain(patch.node).patch([patch.patch]).then(callback);
+        Chain(patch.node).patch([patch.patch]).then(function () {
+            log.info("Patched node: " + patch.node._doc);
+            callback();
+        });
     }, function (err) {
         // completed pathes
         callback(null, context);
