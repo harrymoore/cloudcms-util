@@ -141,11 +141,11 @@ function parseInput(context, callback) {
 
     const result = excelToJson({
         sourceFile: context.xlsxSource,
-        header:{
+        header: {
             rows: 1
         }
     });
-    
+
     // only interested in the first tab of the spreadsheet
     context.inputNodes = filterNodes(result[context.excelTabLabel], context.propertyPath);
 
@@ -158,7 +158,7 @@ function filterNodes(inputRecords, propertyPath) {
     var keepPat2 = new RegExp("^\/preview\/node\/([^\/]+)");
     var keepPat3 = new RegExp("^\/static\/node\/([^\/]+)");
 
-    return _.map(_.filter(_.map(inputRecords, function(record) {
+    return _.map(_.filter(_.map(inputRecords, function (record) {
         var r = {
             id: record['C'] || ""
         };
@@ -166,7 +166,7 @@ function filterNodes(inputRecords, propertyPath) {
         r[propertyPath] = record['D'] || "";
 
         return r;
-    }), function(record) {
+    }), function (record) {
         if (keepPat1.exec(record.id) ||
             keepPat2.exec(record.id) ||
             keepPat3.exec(record.id)) {
@@ -174,25 +174,25 @@ function filterNodes(inputRecords, propertyPath) {
         }
 
         return false;
-    }), function(record) {
+    }), function (record) {
         var a;
         var r = record;
 
         if ((a = keepPat1.exec(record.id)) !== null) {
             r.path = record.id;
-            r.id = a[a.length -1];
+            r.id = a[a.length - 1];
             return r;
         }
 
         if ((a = keepPat2.exec(record.id)) !== null) {
             r.path = record.id;
-            r.id = a[a.length -1];
+            r.id = a[a.length - 1];
             return r;
         }
 
         if ((a = keepPat3.exec(record.id)) !== null) {
             r.path = record.id;
-            r.id = a[a.length -1];
+            r.id = a[a.length - 1];
             return r;
         }
 
@@ -217,21 +217,21 @@ function queryNodes(context, callback) {
         _doc: {
             "$in": context.csvNodeIds
         }
-    },{
-        limit: -1
-    }).then(function () {
-        if (this.size() === 0) {
-            log.warn("No nodes found");
+    }, {
+            limit: -1
+        }).then(function () {
+            if (this.size() === 0) {
+                log.warn("No nodes found");
+                callback(null, context);
+                return;
+            }
+
+            context.nodes = this.asArray();
+            log.debug("query result: " + JSON.stringify(context.nodes, null, 2));
+
             callback(null, context);
             return;
-        }
-
-        context.nodes = this.asArray();
-        log.debug("query result: " + JSON.stringify(context.nodes, null, 2));
-
-        callback(null, context);
-        return;
-    });
+        });
 }
 
 function reportNodes(context, callback) {
@@ -244,7 +244,7 @@ function reportNodes(context, callback) {
 
     log.info("report:");
     _.each(context.nodes, function (node, index, list) {
-        console.log(node._doc + ": " + (node[context.propertyPath] || ""));
+        log.info(node._doc + ": " + (node[context.propertyPath] || ""));
     });
 
     callback(null, context);
@@ -297,67 +297,67 @@ function patchNodes(context, callback) {
 
 function getOptions() {
     return [{
-            name: 'help',
-            alias: 'h',
-            type: Boolean
-        },
-        {
-            name: 'verbose',
-            alias: 'v',
-            type: Boolean,
-            description: 'verbose logging'
-        },
-        {
-            name: 'prompt',
-            alias: 'p',
-            type: Boolean,
-            description: 'prompt for username and password. overrides gitana.json credentials'
-        },
-        {
-            name: 'use-credentials-file',
-            alias: 'c',
-            type: Boolean,
-            description: 'use credentials file ~/.cloudcms/credentials.json. overrides gitana.json credentials'
-        },
-        {
-            name: 'gitana-file-path',
-            alias: 'g',
-            type: String,
-            description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json'
-        },
-        {
-            name: 'branch',
-            alias: 'b',
-            type: String,
-            description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"'
-        },
-        {
-            name: 'xlsx-source',
-            alias: 'x',
-            type: String,
-            description: 'path to a xlsx file with node id and property information. The xlsx file should have headers: ID, PROPERTY_PATH, PROPERTY_VALUE'
-        },
-        {
-            name: 'tab-label',
-            type: String,
-            description: 'name of the xlsx spreadsheet tab containing the image data.'
-        },
-        {
-            name: 'property-path',
-            type: String,
-            description: 'name of the JSON property to update when patching.'
-        },
-        {
-            name: 'report',
-            type: Boolean,
-            description: 'read nodes listed in the csv file and report the current value of the property. No node updates are made.'
-        },
-        {
-            name: 'overwrite',
-            alias: 'o',
-            type: Boolean,
-            description: 'overwrite properties that already exist. by default only missing properties will be set'
-        }
+        name: 'help',
+        alias: 'h',
+        type: Boolean
+    },
+    {
+        name: 'verbose',
+        alias: 'v',
+        type: Boolean,
+        description: 'verbose logging'
+    },
+    {
+        name: 'prompt',
+        alias: 'p',
+        type: Boolean,
+        description: 'prompt for username and password. overrides gitana.json credentials'
+    },
+    {
+        name: 'use-credentials-file',
+        alias: 'c',
+        type: Boolean,
+        description: 'use credentials file ~/.cloudcms/credentials.json. overrides gitana.json credentials'
+    },
+    {
+        name: 'gitana-file-path',
+        alias: 'g',
+        type: String,
+        description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json'
+    },
+    {
+        name: 'branch',
+        alias: 'b',
+        type: String,
+        description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"'
+    },
+    {
+        name: 'xlsx-source',
+        alias: 'x',
+        type: String,
+        description: 'path to a xlsx file with node id and property information. The xlsx file should have headers: ID, PROPERTY_PATH, PROPERTY_VALUE'
+    },
+    {
+        name: 'tab-label',
+        type: String,
+        description: 'name of the xlsx spreadsheet tab containing the image data.'
+    },
+    {
+        name: 'property-path',
+        type: String,
+        description: 'name of the JSON property to update when patching.'
+    },
+    {
+        name: 'report',
+        type: Boolean,
+        description: 'read nodes listed in the csv file and report the current value of the property. No node updates are made.'
+    },
+    {
+        name: 'overwrite',
+        alias: 'o',
+        type: Boolean,
+        description: 'overwrite properties that already exist. by default only missing properties will be set'
+    }
     ];
 }
 
@@ -374,29 +374,29 @@ function handleOptions() {
 }
 
 function printHelp(optionsList) {
-    console.log(commandLineUsage([{
-            header: 'Cloud CMS Patch Nodes',
-            content: 'Update nodes in a branch by applying an HTTP PATCH method API call. The node ids and property information should be supplied in a CSV file.'
+    log.info(commandLineUsage([{
+        header: 'Cloud CMS Patch Nodes',
+        content: 'Update nodes in a branch by applying an HTTP PATCH method API call. The node ids and property information should be supplied in a CSV file.'
+    },
+    {
+        header: 'Options',
+        optionList: optionsList
+    },
+    {
+        header: 'Examples',
+        content: [{
+            desc: '\n1. Report current node property values:',
         },
         {
-            header: 'Options',
-            optionList: optionsList
+            desc: 'npx cloudcms-util patch --report --csv-source ./patch-test1.csv'
         },
         {
-            header: 'Examples',
-            content: [{
-                    desc: '\n1. Report current node property values:',
-                },
-                {
-                    desc: 'npx cloudcms-util patch --report --csv-source ./patch-test1.csv'
-                },
-                {
-                    desc: '\n2. Apply updates to nodes listed in a CSV:',
-                },
-                {
-                    desc: 'npx cloudcms-util patch --overwrite --csv-source ./patch-test1.csv'
-                }
-            ]
+            desc: '\n2. Apply updates to nodes listed in a CSV:',
+        },
+        {
+            desc: 'npx cloudcms-util patch --overwrite --csv-source ./patch-test1.csv'
         }
+        ]
+    }
     ]));
 }
