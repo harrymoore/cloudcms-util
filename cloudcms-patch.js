@@ -51,6 +51,7 @@ var option_prompt = options["prompt"];
 var option_useCredentialsFile = options["use-credentials-file"];
 var option_gitanaFilePath = options["gitana-file-path"] || "./gitana.json";
 var option_branchId = options["branch"] || "master";
+var option_queryFilePath = options["query-file-path"];
 var option_report = options["report"] || false;
 var option_csvSource = options["csv-source"];
 var option_overwrite = options["overwrite"] || false;
@@ -103,6 +104,8 @@ function handlePatch(reportOnly) {
             platformId: platform.getId(),
             repositoryId: branch.getRepositoryId(),
             reportOnly: option_report,
+            queryFilePath: option_queryFilePath,
+            query: queryFilePath ? require(option_queryFilePath) : null,
             csvSource: option_csvSource,
             overwrite: option_overwrite,
 

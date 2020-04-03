@@ -125,8 +125,10 @@ function createDefinition(options) {
 }
 
 function createFormFields(options) {
-    var defPath = init(options).definitions;
-    var definitionQName = options["definition-qname"];
+    var config = init(options);
+    var defPath = config.definitions;
+    var dataPath = config.data;
+    var definitionQName = options["qname"];
     var overwrite = options["overwrite"];
 
     if (!definitionQName) {
@@ -342,11 +344,6 @@ function handleOptions(command) {
 
     if (command === 'create-form-fields') {
         options.push({
-            name: 'definition-qname',
-            alias: 'q',
-            type: String,
-            description: '_qname of the type definition'
-        }, {
             name: 'overwrite',
             alias: 'o',
             type: Boolean,

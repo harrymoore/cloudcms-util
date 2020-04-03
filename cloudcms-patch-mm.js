@@ -18,7 +18,7 @@ const log = new Logger({
     showMillis: false,
     showTimestamp: true
 });
-const csv = require('csvtojson');
+// const csv = require('csvtojson');
 const excelToJson = require('convert-excel-to-json');
 const objectPath = require("object-path");
 
@@ -137,6 +137,7 @@ function parseInput(context, callback) {
 
     if (!fs.existsSync(context.xlsxSource)) {
         callback("Input file not found: " + context.xlsxSource, context);
+        return;
     }
 
     const result = excelToJson({

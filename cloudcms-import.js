@@ -1343,6 +1343,8 @@ function writeDefinitionsToBranch(context, callback) {
 }
 
 function writeDefinitionToBranch(context, definitionQname, callback) {
+    log.debug("writeDefinitionToBranch() " + definitionQname);
+
     var definitionNode = null;
     for(var i = 0; i < context.typeDefinitions.length; i++) {
         if (context.typeDefinitions[i]._qname == definitionQname) {
@@ -1357,7 +1359,10 @@ function writeDefinitionToBranch(context, definitionQname, callback) {
         // update
         log.debug("Updating definition node " + newDefinitionNode._qname + " " + newDefinitionNode.title);
 
-        util.updateDocumentProperties(definitionNode, newDefinitionNode);
+        delete newDefinitionNode._doc;
+        delete newDefinitionNode._qname;
+        
+        util.updateDocumentProperties(definitionNode, JSON.parse(JSON.stringify(newDefinitionNode,null,1)));
         
         delete definitionNode._source_doc;
         
@@ -1493,14 +1498,14 @@ function getDefinitionInstances(context, typeDefinitionNode, callback) {
 function handleListTypes() {
     log.debug("handleListTypes()");
     
-    util.getBranch(gitanaConfig, option_branchId, function(err, branch, platform, stack, domain, primaryDomain) {
+    util.getBranch(gitanaConfig, option_branchId, function (err, branch, platform, stack, domain, primaryDomain, project) {
         if (err)
         {
             log.debug("Error connecting to Cloud CMS branch: " + err);
             return;
         }
 
-        log.info("connected to branch: " + branch.title || branch._doc);
+        log.info("connected to project: \"" + project.title + "\" and branch: \"" + (branch.title || branch._doc) + "\"");
 
         var context = {
             branchId: option_branchId,
@@ -1595,23 +1600,22 @@ function getBranchDefinitions(context, callback) {
         context.typeDefinitions = [];
     }
 
-    // var query = {};
     var query = {
         _type: {
             "$in": ["d:type", "d:association", "d:feature"]
-        },
-        _qname: { 
-            "$in": qnames
         }
     };
 
-    // if (qnames && Gitana.isArray(qnames)) {
-    //     query._qname = {
-    //         "$in": qnames
-    //     };
-    // }
+    if (qnames) {
+        if (Gitana.isArray(qnames)) {
+            query._qname = {
+                "$in": qnames
+            };
+        } else {
+            query._qname = qnames;
+        }
+    }
 
-    // context.branch.queryDefinitions(query,{
     context.branch.queryNodes(query,{
         limit: -1,
         sort: {
