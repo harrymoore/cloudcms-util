@@ -1,3 +1,4 @@
+node_modules/
 gitana.json
 gitana-*.json
 *-gitana.json

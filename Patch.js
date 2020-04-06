@@ -41,12 +41,12 @@ class Patch extends BaseScript {
         let query = require(this.option_queryFilePath);
         if ((this.option_opMove || this.option_opReplace || this.option_opCopy || this.option_opRemove) && !query[this.option_propertyPath]) {
             // if doing a move, copy, replace or remove then only need to query for nodes that have the property now
-            query[this.option_propertyPath] = {
+            query[this.option_propertyPath.split('/').join('.')] = {
                 '$exists': true
             };
         }
         query._fields = {};
-        query._fields[this.option_propertyPath] = 1;
+        query._fields[this.option_propertyPath.split('/').join('.')] = 1;
 
         let result = await this.session.queryNodes(this.repository, this.branch, query, {metadata: true, full: true, limit: -1});
 
@@ -78,7 +78,7 @@ class Patch extends BaseScript {
                 node: node._doc,
                 patch: {
                     op: op,
-                    path: this.option_propertyPath.split(".").join("/"), // ensure property path is formatted
+                    path: '/' + this.option_propertyPath.split('.').join('/').split('/').join('/'), // ensure property path is formatted
                 }
             };
 
@@ -91,8 +91,8 @@ class Patch extends BaseScript {
                 
                 case 'copy':
                 case 'move':
-                    patch.patch.from = '/' + this.option_propertyPath.split('.').join('/'); // ensure property path is formatted
-                    patch.patch.path = '/' + this.option_newPropertyPath.split('.').join('/'); // ensure property path is formatted
+                    patch.patch.from = '/' + this.option_propertyPath.split('.').join('/').split('/').join('/'); // ensure property path is formatted
+                    patch.patch.path = '/' + this.option_newPropertyPath.split('.').join('/').split('/').join('/'); // ensure property path is formatted
                     break;
             }
 
