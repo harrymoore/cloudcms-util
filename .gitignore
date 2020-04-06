@@ -1,3 +1,4 @@
+node_modules/
 gitana.json
 gitana-*.json
 *-gitana.json
@@ -12,3 +13,4 @@ data-oup-support
 data-mm-qa
 .vscode
 .DS_Store
+mm

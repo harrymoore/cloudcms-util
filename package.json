@@ -1,6 +1,6 @@
 {
     "name": "cloudcms-util",
-    "version": "2.4.7",
+    "version": "3.0.1",
     "description": "Various Cloud CMS command line utilities. Currently supports import and export of Cloud CMS nodes or definitions",
     "bin": {
         "cloudcms-util": "./bin/cloudcms-util.js"
@@ -11,28 +11,29 @@
     ],
     "repository": "harrymoore/cloudcms-import-export",
     "dependencies": {
-        "async": "^2.6.2",
+        "async": "^2.6.3",
         "basic-logger": "^0.4.4",
         "chalk": "^2.4.2",
         "change-case": "^3.1.0",
+        "cloudcms": "^0.1.0",
         "command-line-args": "5.0.1",
         "command-line-usage": "4.1.0",
         "convert-excel-to-json": "^1.6.1",
-        "csvtojson": "^2.0.8",
-        "gitana": "1.0.300",
+        "csvtojson": "^2.0.10",
+        "gitana": "^1.0.310",
         "klaw-sync": "^6.0.0",
         "load-json-file": "^4.0.0",
-        "mime-types": "^2.1.24",
+        "mime-types": "^2.1.26",
         "object-path": "^0.11.4",
-        "prompt-sync": "^4.1.4",
+        "prompt-sync": "^4.2.0",
         "random-string-simple": "^1.0.1",
-        "request": "^2.88.0",
-        "underscore": "^1.9.1",
+        "request": "^2.88.2",
+        "underscore": "^1.10.2",
         "write-json-file": "^2.3.0"
     },
     "optionalDependencies": {},
     "devDependencies": {
-        "jshint": "^2.10.2"
+        "jshint": "^2.11.0"
     },
     "private": false
 }

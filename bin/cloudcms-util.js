@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-
-'use strict';
+/*jshint esversion: 6 */
 var chalk = require('chalk');
 var path = require("path").posix;
 var fs = require("fs");
@@ -17,7 +16,14 @@ var [, , ...args] = process.argv;
 var script = args[0] || "";
 process.argv.shift();
 
-if (script === "import") {
+// process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+if (script === "patch") {
+    const Command = require('../Patch');
+    let cmd = new Command();
+    cmd.exec();
+    return;
+} else if (script === "import") {
     require('../cloudcms-import');
     return;
 } else if (script === "export") {
