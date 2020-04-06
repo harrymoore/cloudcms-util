@@ -20,7 +20,7 @@
         "command-line-usage": "4.1.0",
         "convert-excel-to-json": "^1.6.1",
         "csvtojson": "^2.0.10",
-        "gitana": "1.0.300",
+        "gitana": "^1.0.310",
         "klaw-sync": "^6.0.0",
         "load-json-file": "^4.0.0",
         "mime-types": "^2.1.26",
