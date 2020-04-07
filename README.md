@@ -58,8 +58,3 @@ edith,edith.m.user2@anotheremail.com,Edith,User2,,Hello$World.1
 ```
 npx cloudcms-util patch-nodes -g ./gitana/gitana-local-docker-test-proxy.json --csv-source ./data/patch-test1.csv --overwrite -v
 ```
-
-## MM Apply bulk property updates
-```
-npx cloudcms-util mm-patch-nodes -g ./gitana/gitana-local-docker-test-proxy.json --xlsx-source ./data/patch-test2.xlsx --tab-label "Studio M" --property-path altText  --overwrite -v
-```

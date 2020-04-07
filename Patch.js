@@ -22,7 +22,7 @@ class Patch extends BaseScript {
     async exec() {
         log.info("handlePatch()");
 
-        await this.connect();
+        await this.init();
 
         log.info(chalk.yellow("Connected to project: \"" + this.project.title + "\" and branch: " + this.branch.title || this.branch._doc));
 
