@@ -1,6 +1,7 @@
 # Cloud CMS Command Line Utility
 [![NPM Version](https://img.shields.io/npm/v/cloudcms-util.svg)](https://www.npmjs.com/package/cloudcms-util)
 [![NPM Download](https://img.shields.io/npm/dm/cloudcms-util.svg)](https://www.npmjs.com/package/cloudcms-util)
+[![Travis Build](https://img.shields.io/travis/harrymoore/cloudcms-util)](https://img.shields.io/travis/harrymoore/cloudcms-util)
 
 Command line scripts to perform various Cloud CMS related tasks such as import and export json nodes and binary attachments to and from Cloud CMS repositories.
 
