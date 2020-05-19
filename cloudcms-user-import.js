@@ -122,10 +122,10 @@ function handleCsvUsers() {
 
         async.waterfall([
             async.ensureAsync(async.apply(parseCsv, context)),
-                async.ensureAsync(queryExistingUsers),
-                    async.ensureAsync(createMissingUsers),
-                        async.ensureAsync(addUsersToProject),
-                            async.ensureAsync(addUsersToProjectTeam)
+            async.ensureAsync(queryExistingUsers),
+            async.ensureAsync(createMissingUsers),
+            async.ensureAsync(addUsersToProject),
+            async.ensureAsync(addUsersToProjectTeam)
         ], function (err, context) {
             if (err) {
                 log.error("Error importing: " + err);
