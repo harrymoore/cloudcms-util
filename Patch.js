@@ -20,9 +20,7 @@ class Patch extends BaseScript {
      * entry point 
     */
     async exec() {
-        log.info("handlePatch()");
-
-        await this.init();
+        await this.connect();
 
         log.info(chalk.yellow("Connected to project: \"" + this.project.title + "\" and branch: " + this.branch.title || this.branch._doc));
 
@@ -156,26 +154,22 @@ const defaultOptions = [
 const defaultHelpMessage = [
     {
         header: 'Cloud CMS Patch Nodes',
-        content: 'Update nodes in a branch by applying an HTTP PATCH method API call. The node ids and property information should be supplied in a CSV file.'
-    },
-    {
-        header: 'Options',
-        optionList: this.mergedOptions
+        content: 'Update nodes in a branch by applying an HTTP PATCH method API call. The nodes to update are identified by a provided query.'
     },
     {
         header: 'Examples',
         content: [{
-            desc: '\n1. Report current property values for nodes found in query results:',
-        },
-        {
-            desc: 'npx cloudcms-util patch --report-only --property-path "/body" --query-file-path ./patch-test1.json'
-        },
-        {
-            desc: '\n2. Apply updates for nodes found in query results:',
-        },
-        {
-            desc: 'npx cloudcms-util patch --move --property-path "/body" --new-property-path "/body" --query-file-path ./patch-test1.json'
-        }
+                desc: '\n1. Report current property values for nodes found in query results:',
+            },
+            {
+                desc: 'npx cloudcms-util patch --report-only --property-path "/body" --query-file-path ./patch-test1.json'
+            },
+            {
+                desc: '\n2. Apply updates for nodes found in query results:',
+            },
+            {
+                desc: 'npx cloudcms-util patch --move --branch "master" --property-path "/body" --new-property-path "/bodyContent" --query-file-path ./patch-test1.json'
+            }
         ]
     }
 ];
