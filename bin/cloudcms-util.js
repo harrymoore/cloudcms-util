@@ -136,7 +136,8 @@ function createFormFields(options) {
     var dataPath = config.data;
     var definitionQName = options["qname"];
     var overwrite = options["overwrite"];
-
+    var formTitle = options["form-title"] || 'master';
+    
     if (!definitionQName) {
         console.log(chalk.red("Bad or missing type qname: " + definitionQName));
     }
@@ -144,7 +145,18 @@ function createFormFields(options) {
     var defPath = path.resolve(dataPath, 'definitions', definitionQName.replace(':', SC_SEPARATOR));
     var definition = require(path.resolve(defPath, "node.json"));
     var formPath = path.resolve(defPath, "forms", "master.json");
-    var form = require(formPath);
+    var form = {
+        _type: "n:form",
+        title: formTitle,
+        fields: {
+        },
+        engineId: "alpaca1"
+    };
+
+    // load the actual form if it exists
+    if (fs.existsSync(formPath)) {
+        form = require(formPath);
+    }
 
     if (overwrite) {
         form.fields = {};
@@ -241,7 +253,7 @@ function pickerConfig(propertyName, property, field) {
         field.picker = {
             typeQName: property.nodeType || "n:node",
             associationType: property.associationType || "a:linked",
-            includeChildTypes: true
+            includeChildTypes: false
         };
     }
 }
@@ -355,6 +367,12 @@ function handleOptions(command) {
             type: Boolean,
             description: 'Overwrite any existing fields in the form'
         });
+        options.push({
+            name: 'form-title',
+            type: String,
+            default: "master",
+            description: 'Title property for new form'
+        });        
     }
 
     return cliArgs(options);
