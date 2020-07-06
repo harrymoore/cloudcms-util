@@ -39,6 +39,11 @@ class Patch extends BaseScript {
         let query = require(this.option_queryFilePath);
         if ((this.option_opMove || this.option_opReplace || this.option_opCopy || this.option_opRemove) && !query[this.option_propertyPath]) {
             // if doing a move, copy, replace or remove then only need to query for nodes that have the property now
+            if (!this.option_propertyPath) {
+                log.error("Operation: " + op + " requires --property-path and --new-property-path");
+                printHelp(getOptions());
+                return;
+            }
             query[this.option_propertyPath.split('/').join('.')] = {
                 '$exists': true
             };
@@ -112,7 +117,7 @@ const defaultOptions = [
         name: 'report-only',
         type: Boolean,
         default: false,
-        description: 'read nodes listed in the csv file and report the current value of the property. No node updates are made.'
+        description: 'read nodes listed in the query resullts and report the current value of the property. No node updates are made.'
     },
     {
         name: 'query-file-path', 
