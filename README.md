@@ -37,7 +37,9 @@ It is not necessary to install this utility as it will run as an npx script. But
         "foo": "bar"
     }
 
-    npx cloudcms-util export.js -y ./myquery.json
+    npx cloudcms-util export -g ./cloudcms-files/source-repo-gitana.json -y ./myquery.json
+
+    requires the equivalent of your project's gitana.json in this file path: ./cloudcms-files/source-repo-gitana.json
 
 ## Import users from a CSV file to the primary platform domain. Optionally add the users to a project.
 
