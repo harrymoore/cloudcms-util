@@ -43,6 +43,8 @@ var option_includeInstances = options["include-instances"] || false;
 var option_includeRelated = options["include-related"] || false;
 var option_dataFolderPath = options["folder-path"] || "./data";
 var option_queryFilePath = options["query-file-path"];
+var option_traverse = options["traverse"];
+// var option_traverseFilePath = options["traverse-query-file-path"];
 log.debug("option_queryFilePath " + option_queryFilePath);
 
 //
@@ -111,11 +113,12 @@ function handleQueryBasedExport() {
         };
 
         async.waterfall([
-            async.apply(getNodesFromQuery, context),
-                async.ensureAsync(async.apply(getRelated, context.nodes)),
-                    async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
-                        async.ensureAsync(async.apply(downloadAttachments, context.nodes, "nodes")),
-                            async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.nodes, "nodes")),
+        async.apply(getNodesFromQuery, context),
+        getNodesFromTraverseQuery,
+        async.ensureAsync(async.apply(getRelated, context.nodes)),
+        async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
+        async.ensureAsync(async.apply(downloadAttachments, context.nodes, "nodes")),
+        async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.nodes, "nodes")),
         ], function (err, context) {
             if (err) {
                 log.error("Error exporting: " + err);
@@ -157,15 +160,15 @@ function handleExport() {
         };
 
         async.waterfall([
-            async.apply(getDefinitions, context),
-                async.ensureAsync(getDefinitionFormAssociations),
-                    async.ensureAsync(getDefinitionForms),
-                        async.ensureAsync(writeDefinitionJSONtoDisk),
-                            async.ensureAsync(getContentInstances),
-                                async.ensureAsync(async.apply(getRelated, context.instanceNodes)),
-                                    async.ensureAsync(async.apply(downloadAttachments, context.instanceNodes, "instances")),
-                                        async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
-                                            async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.instanceNodes, "instances"))
+        async.apply(getDefinitions, context),
+        async.ensureAsync(getDefinitionFormAssociations),
+        async.ensureAsync(getDefinitionForms),
+        async.ensureAsync(writeDefinitionJSONtoDisk),
+        async.ensureAsync(getContentInstances),
+        async.ensureAsync(async.apply(getRelated, context.instanceNodes)),
+        async.ensureAsync(async.apply(downloadAttachments, context.instanceNodes, "instances")),
+        async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
+        async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.instanceNodes, "instances"))
         ], function (err, context) {
             if (err) {
                 log.error("Error exporting: " + err);
@@ -196,6 +199,55 @@ function getNodesFromQuery(context, callback) {
         util.enhanceNode(node);
         nodes.push(node);
     }).then(function () {
+        callback(null, context);
+    });
+}
+
+function getNodesFromTraverseQuery(context, callback) {
+    log.debug("getNodesFromTraverseQuery()");
+
+    if (!option_traverse) {
+        // no traverse needed
+        return callback(null, context);
+    }
+
+    // there should already be nodes from the previous query.
+    // use this list of nodes to then run a traverse on each
+    var nodes = context.nodes;
+    if (!context.associations) {
+        context.associations = [];
+    }
+
+    async.eachOfLimit(nodes, 5, function(node, key, cb) {
+        // run the traverse
+        node.traverse({
+            filter: "ALL_BUT_START_NODE",
+            associations: {
+                "a:linked": "ANY",
+                "mmcx:bloghasauthor": "ANY",
+                "mmcx:bloghascategory": "ANY",
+                "mmcx:hastag": "ANY",
+                "mmcx:has-image": "ANY",
+            },
+            depth: 2,
+            types: [
+                "n:node"
+            ]
+        }).then(function () {
+            var result = this;
+
+            context.associations.push(Object.values(result._associations));
+
+            Object.values(result._nodes).forEach( node => {
+                context.nodes.push(util.enhanceNode(node));
+            });
+
+            cb();
+        });    
+    }, function(err) {
+        if (err) {
+            console.log("traverse error: " + err);
+        }
         callback(null, context);
     });
 }
@@ -506,7 +558,7 @@ function cleanNode(node, qnameMod) {
     n = JSON.parse(JSON.stringify(n));
 
 
-    // n._source_doc = n._doc;
+    n._source_doc = n._doc;
     n._qname += qnameMod || "";
     // delete n._doc;
     delete n._system;
@@ -726,6 +778,16 @@ function getOptions() {
             alias: 'y',
             type: String,
             description: 'path to a json file defining the query'
+        },
+        {
+            name: 'traverse',
+            type: Boolean,
+            description: 'traverse nodes found in initial query to find all related nodes'
+        },
+        {
+            name: 'traverse-query-file-path',
+            type: String,
+            description: 'path to a json file defining the traverse query'
         }
     ];
 }
