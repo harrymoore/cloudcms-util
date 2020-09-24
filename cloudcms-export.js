@@ -507,7 +507,11 @@ function writeDefinitionJSONtoDisk(context, callback) {
     var includeInstances = context.includeInstances;
     var typeDefinitions = context.typeDefinitions;
 
-    dataFolderPath = path.normalize(dataFolderPath)
+    dataFolderPath = path.normalize(dataFolderPath);
+    fs.mkdirSync(dataFolderPath, {
+        recursive: true
+    });
+
     if (fs.existsSync(dataFolderPath)) {
         Object.keys(typeDefinitions).forEach(function (typeId) {
             log.debug(JSON.stringify(typeDefinitions[typeId]));
@@ -520,7 +524,7 @@ function writeDefinitionJSONtoDisk(context, callback) {
         callback(null, context);
         return;
     } else {
-        callback("folder path not found: " + dataFolderPath);
+        callback("data folder path not found or could not be created: " + dataFolderPath);
         return;
     }
 }
