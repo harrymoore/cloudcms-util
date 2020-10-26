@@ -13,6 +13,7 @@ const util = require("./lib/util");
 const writeJsonFile = require('write-json-file');
 const _ = require('underscore');
 const Logger = require('basic-logger');
+const { map } = require("underscore");
 const log = new Logger({
     showMillis: false,
     showTimestamp: true
@@ -41,6 +42,7 @@ var option_definitionQNames = options["definition-qname"]; // array
 var option_allDefinitions = options["all-definitions"] || false;
 var option_includeInstances = options["include-instances"] || false;
 var option_includeRelated = options["include-related"] || false;
+var option_includeTranslations = options["include-translations"] || false;
 var option_dataFolderPath = options["folder-path"] || "./data";
 var option_queryFilePath = options["query-file-path"];
 var option_traverse = options["traverse"];
@@ -105,6 +107,8 @@ function handleQueryBasedExport() {
             queryFilePath: option_queryFilePath,
             dataFolderPath: option_dataFolderPath,
             includeRelated: option_includeRelated,
+            includeTranslations: option_includeTranslations,
+            translationNodes: {},
             query: require(path.resolve(path.normalize(option_queryFilePath))),
             nodes: [],
             relatedIds: [],
@@ -116,8 +120,11 @@ function handleQueryBasedExport() {
         async.apply(getNodesFromQuery, context),
         getNodesFromTraverseQuery,
         async.ensureAsync(async.apply(getRelated, context.nodes)),
+        async.ensureAsync(async.apply(getTranslations, context.relatedNodes)),
+        async.ensureAsync(async.apply(getTranslations, context.nodes)),
         async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
         async.ensureAsync(async.apply(downloadAttachments, context.nodes, "nodes")),
+        async.ensureAsync(async.apply(downloadAttachments, context.translationNodes, "related")),
         async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.nodes, "nodes")),
         ], function (err, context) {
             if (err) {
@@ -148,12 +155,15 @@ function handleExport() {
             branch: branch,
             allDefinitions: option_allDefinitions,
             importTypeQNames: option_definitionQNames,
+            queryFilePath: null,
             gitanaConfig: gitanaConfig,
             platform: platform,
             typeDefinitions: [],
             dataFolderPath: option_dataFolderPath,
             includeInstances: option_includeInstances,
             includeRelated: option_includeRelated,
+            includeTranslations: option_includeTranslations,
+            translationNodes: {},
             relatedIds: [],
             relatedNodes: [],
             instanceNodes: {}
@@ -166,6 +176,7 @@ function handleExport() {
         async.ensureAsync(writeDefinitionJSONtoDisk),
         async.ensureAsync(getContentInstances),
         async.ensureAsync(async.apply(getRelated, context.instanceNodes)),
+        async.ensureAsync(async.apply(getTranslations, context.instanceNodes)),
         async.ensureAsync(async.apply(downloadAttachments, context.instanceNodes, "instances")),
         async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
         async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.instanceNodes, "instances"))
@@ -252,23 +263,28 @@ function getNodesFromTraverseQuery(context, callback) {
     });
 }
 
-function downloadAttachments(list, pathPart, context, callback) {
+function downloadAttachments(nodes, pathPart, context, callback) {
     log.debug("downloadAttachments() " + pathPart);
 
-    if (!Gitana.isArray(list)) {
+    if (!nodes.length) {
+        callback(null, context);
+        return;
+    }
+
+    if (!Gitana.isArray(nodes)) {
         // flatten to an array if list is an associative array of sub lists (by type)
         var newList = [];
-        var types = _.keys(list);
+        var types = _.keys(nodes);
         for (var i = 0; i < types.length; i++) {
-            for (var j = 0; j < list[types[i]].length; j++) {
-                newList.push(list[types[i]][j]);
+            for (var j = 0; j < nodes[types[i]].length; j++) {
+                newList.push(nodes[types[i]][j]);
             }
         }
 
-        list = newList;
+        nodes = newList;
     }
 
-    async.eachSeries(list, async.apply(downloadNodeAttachments, context, pathPart),
+    async.eachSeries(nodes, async.apply(downloadNodeAttachments, context, pathPart),
         function (err) {
             if (err) {
                 log.error("Error reading attachments: " + err);
@@ -359,6 +375,22 @@ function writeContentInstanceJSONtoDisk(nodes, pathPart, context, callback) {
         writeJsonFile.sync(buildRelatedPath(dataFolderPath, node), node);
     });
 
+    // write translation nodes
+    var translationNodes = context.translationNodes;
+    Object.keys(translationNodes).forEach(masterNodeId => {
+        var masterNode = _.findWhere(nodes, {_doc: masterNodeId});
+        assert.ok(masterNode);
+
+        var translations = context.translationNodes[masterNodeId];
+        translations.forEach(translatedNode => {
+            var nodeJSON = cleanNode(translatedNode, "");
+            var features = translatedNode.__features();
+            var locale = features["f:translation"].locale;
+            var filePath = path.normalize(path.resolve(context.dataFolderPath, pathPart, masterNode._type.replace(':', SC_SEPARATOR), masterNode._doc, "translations", locale, "node.json"));
+            writeJsonFile.sync(filePath, nodeJSON);
+        });
+    });
+
     callback(null, context);
 }
 
@@ -412,6 +444,51 @@ function getRelated(list, context, callback) {
     }).then(function () {
         // log.debug("related nodes: " + JSON.stringify(context.relatedNodes, null, 2));
         callback(null, context);
+    });
+}
+
+function getTranslations(nodes, context, callback) {
+    log.debug("getTranslations()");
+
+    if (!context.includeTranslations) {
+        callback(null, context);
+        return;
+    }
+    if (!nodes.length) {
+        callback(null, context);
+        return;
+    }
+    // if (!!!context.queryFilePath && !context.includeInstances) {
+    //     // have to include instances to get translations
+    //     callback(null, context);
+    //     return;
+    // }
+
+    var masterNodes = Object.values(nodes).filter(node => {
+        let features = node.__features();
+        return !!features["f:multilingual"];
+    });
+
+    async.eachSeries(masterNodes, function(masterNode, callback) {
+        context.translationNodes[masterNode._doc] = [];
+        masterNode.listTranslations().each(function() {
+            var node = this;
+            util.enhanceNode(node);
+            context.translationNodes[masterNode._doc].push(node);    
+        }).then(function(){
+            callback();
+        });
+    },
+    function (err) {
+        if (err) {
+            log.error("Error reading translation nodes: " + err);
+            callback(err);
+            return;
+        }
+
+        log.debug("done downloading node translations");
+        callback(null, context);
+        return;
     });
 }
 
@@ -770,6 +847,12 @@ function getOptions() {
             alias: 'r',
             type: Boolean,
             description: 'include instance records referred to in relators on instance records'
+        },
+        {
+            name: 'include-translations',
+            alias: 's',
+            type: Boolean,
+            description: 'include translation records of selected nodes'
         },
         {
             name: 'folder-path',
