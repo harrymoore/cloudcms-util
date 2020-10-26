@@ -108,23 +108,23 @@ function handleQueryBasedExport() {
             dataFolderPath: option_dataFolderPath,
             includeRelated: option_includeRelated,
             includeTranslations: option_includeTranslations,
-            translationNodes: {},
             query: require(path.resolve(path.normalize(option_queryFilePath))),
             nodes: [],
             relatedIds: [],
             relatedNodes: [],
+            translationNodes: [],
             queryPageSize: 100
         };
 
         async.waterfall([
         async.apply(getNodesFromQuery, context),
-        getNodesFromTraverseQuery,
+        async.ensureAsync(async.apply(getNodesFromTraverseQuery)),
         async.ensureAsync(async.apply(getRelated, context.nodes)),
-        async.ensureAsync(async.apply(getTranslations, context.relatedNodes)),
+        // async.ensureAsync(async.apply(getTranslations, context.relatedNodes)),
         async.ensureAsync(async.apply(getTranslations, context.nodes)),
-        async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
         async.ensureAsync(async.apply(downloadAttachments, context.nodes, "nodes")),
-        async.ensureAsync(async.apply(downloadAttachments, context.translationNodes, "related")),
+        async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
+        async.ensureAsync(async.apply(downloadAttachments, context.translationNodes, "nodes")),
         async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.nodes, "nodes")),
         ], function (err, context) {
             if (err) {
@@ -163,9 +163,9 @@ function handleExport() {
             includeInstances: option_includeInstances,
             includeRelated: option_includeRelated,
             includeTranslations: option_includeTranslations,
-            translationNodes: {},
             relatedIds: [],
             relatedNodes: [],
+            translationNodes: [],
             instanceNodes: {}
         };
 
@@ -179,6 +179,7 @@ function handleExport() {
         async.ensureAsync(async.apply(getTranslations, context.instanceNodes)),
         async.ensureAsync(async.apply(downloadAttachments, context.instanceNodes, "instances")),
         async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
+        async.ensureAsync(async.apply(downloadAttachments, context.translationNodes, "translations")),
         async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.instanceNodes, "instances"))
         ], function (err, context) {
             if (err) {
@@ -321,6 +322,11 @@ function downloadAttachment(context, node, pathPart, attachmentId, callback) {
     log.debug("downloadAttachment()");
 
     var attachmentPath = path.normalize(path.resolve(context.dataFolderPath, pathPart, node._type.replace(':', SC_SEPARATOR), node._doc, "attachments"));
+    if (node.__translationOf) {
+        // translation nodes go to a sub folder of its master node's location
+        attachmentPath = path.normalize(path.resolve(context.dataFolderPath, pathPart, node.__translationOf._type.replace(':', SC_SEPARATOR), node.__translationOf._doc, "translations", node.__features()["f:locale"].locale, "attachments"));
+    }
+
     fs.mkdirSync(path.normalize(attachmentPath), {
         recursive: true
     });
@@ -377,18 +383,10 @@ function writeContentInstanceJSONtoDisk(nodes, pathPart, context, callback) {
 
     // write translation nodes
     var translationNodes = context.translationNodes;
-    Object.keys(translationNodes).forEach(masterNodeId => {
-        var masterNode = _.findWhere(nodes, {_doc: masterNodeId});
-        assert.ok(masterNode);
-
-        var translations = context.translationNodes[masterNodeId];
-        translations.forEach(translatedNode => {
-            var nodeJSON = cleanNode(translatedNode, "");
-            var features = translatedNode.__features();
-            var locale = features["f:translation"].locale;
-            var filePath = path.normalize(path.resolve(context.dataFolderPath, pathPart, masterNode._type.replace(':', SC_SEPARATOR), masterNode._doc, "translations", locale, "node.json"));
-            writeJsonFile.sync(filePath, nodeJSON);
-        });
+    translationNodes.forEach(translationNode => {
+        var translationNodeFilePath = path.normalize(path.resolve(context.dataFolderPath, pathPart, translationNode.__translationOf._type.replace(':', SC_SEPARATOR), translationNode.__translationOf._doc, "translations", translationNode.__features()["f:locale"].locale, "node.json"));
+        var nodeJSON = cleanNode(translationNode, "");
+        writeJsonFile.sync(translationNodeFilePath, nodeJSON);
     });
 
     callback(null, context);
@@ -470,11 +468,11 @@ function getTranslations(nodes, context, callback) {
     });
 
     async.eachSeries(masterNodes, function(masterNode, callback) {
-        context.translationNodes[masterNode._doc] = [];
         masterNode.listTranslations().each(function() {
             var node = this;
             util.enhanceNode(node);
-            context.translationNodes[masterNode._doc].push(node);    
+            node.__translationOf = masterNode;
+            context.translationNodes.push(node);    
         }).then(function(){
             callback();
         });
@@ -638,7 +636,6 @@ function cleanNode(node, qnameMod) {
     util.enhanceNode(n);
     n = JSON.parse(JSON.stringify(n));
 
-
     n._source_doc = n._doc;
     n._qname += qnameMod || "";
     // delete n._doc;
@@ -647,6 +644,7 @@ function cleanNode(node, qnameMod) {
     delete n._attachments;
     delete n.__forms;
     delete n.__formAssociations;
+    delete n.__translationOf;
 
     return n;
 }
