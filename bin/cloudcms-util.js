@@ -35,6 +35,9 @@ if (script === "patch") {
 } else if (script === "import-users") {
     require('../cloudcms-user-import');
     return;
+} else if (script === "delete-nodes") {
+    require('../cloudcms-delete');
+    return;
 } else if (script === "patch-nodes") {
     require('../cloudcms-patch');
     return;
