@@ -15,6 +15,7 @@ const loadJsonFile = require('load-json-file');
 const _ = require('underscore');
 const chalk = require('chalk');
 const Logger = require('basic-logger');
+const { assert } = require("console");
 const log = new Logger({
 	showMillis: false,
 	showTimestamp: true
@@ -63,6 +64,9 @@ var option_includeInstances = options["include-instances"] || false;
 var option_overwriteExistingInstances = options["overwrite-instances"] || false;
 var option_dataFolderPath = options["folder-path"] || "./data";
 var option_includeRelated = options["include-related"] || false;
+var option_includeTranslations = options["include-translations"] || false;
+var option_onlyTranslations = options["only-translations"] || false;
+var option_overwriteExistingTranslations = options["overwrite-existing-translations"] || false;
 var option_nodes = options["nodes"];
 
 //
@@ -123,11 +127,15 @@ function handleNodeImport() {
             repositoryId: branch.getRepositoryId(),
             dataFolderPath: option_dataFolderPath,
             includeRelated: option_includeRelated,
+            includeTranslations: option_includeTranslations,
+            onlyTranslations: option_onlyTranslations,
+            overwriteExistingTranslations: option_overwriteExistingTranslations,
             overwriteExistingInstances: option_overwriteExistingInstances,
             relatedRefs: [],            
             nodes: [],
             existingNodes: {},
             relatedNodes: [],
+            translationNodes: [],
             existingRelatedNodes: [],
             attachmentPaths: {} // array of {"sourceNode": node, "targetNode: node, attachmentsPath"}
         };
@@ -141,6 +149,7 @@ function handleNodeImport() {
             async.ensureAsync(async.apply(writeRelatedNodesToBranch, context.relatedNodes)),
             async.ensureAsync(resolveRelated),
             async.ensureAsync(async.apply(writeNodesToBranch, context.nodes)),
+            async.ensureAsync(async.apply(writeTranslationNodesToBranch, context.nodes)),
             async.ensureAsync(writeNodeAttachmentsToBranch)
         ], function (err, context) {
             if (err)
@@ -178,6 +187,9 @@ function handleImport() {
             localTypeDefinitions: {},
             dataFolderPath: option_dataFolderPath,
             includeRelated: option_includeRelated,
+            includeTranslations: option_includeTranslations,
+            onlyTranslations: option_onlyTranslations,
+            overwriteExistingTranslations: option_overwriteExistingTranslations,
             includeInstances: option_includeInstances,
             overwriteExistingInstances: option_overwriteExistingInstances,
             instanceNodes: [],
@@ -274,11 +286,11 @@ function resolveNodeRefs(context, node) {
 function readExistingNodesFromBranch(context, callback) {
     log.info("readExistingNodesFromBranch()");
 
-    async.eachSeries(context.nodes, function(node, callback){
+    async.eachSeries(context.nodes, function(node, innerCallback){
         log.debug("query for existing node. _type:" + node._type + " title:\"" + node.title + "\"");
         
         if (!node) {
-            callback();
+            innerCallback();
             return;
         }
 
@@ -287,14 +299,14 @@ function readExistingNodesFromBranch(context, callback) {
             context.branch.trap(function(){
                 // not found
                 log.debug("node not found for path: " + node._filePath);
-                callback();
+                innerCallback();
                 return;
             }).readNode("root", node._filePath).then(function() {
                 log.debug("found node at path: " + node._filePath);
                 var thisNode = this;
                 util.enhanceNode(thisNode);
                 context.existingNodes[node._qname] = thisNode;
-                callback();
+                innerCallback();
                 return;
             });
         } else if (node.title) {
@@ -318,7 +330,7 @@ function readExistingNodesFromBranch(context, callback) {
             }).then(function() {
                 if (this.size() === 0) {
                     log.debug("node not found for title: " + node.title);
-                    callback();
+                    innerCallback();
                     return;
                 }
                 
@@ -328,7 +340,7 @@ function readExistingNodesFromBranch(context, callback) {
                     util.enhanceNode(thisNode);
                     context.existingNodes[node._qname] = thisNode;
 
-                    callback();
+                    innerCallback();
                     return;
                 });                        
             });
@@ -339,7 +351,7 @@ function readExistingNodesFromBranch(context, callback) {
             context.branch.trap(function(){
                 // not found
                 log.debug("node not found for _qname: " + node._qname);
-                callback();
+                innerCallback();
                 return;
             }).queryNodes({
                 _qname: node._qname
@@ -353,7 +365,7 @@ function readExistingNodesFromBranch(context, callback) {
                 } else {
                     log.debug("did not find node for _qname: " + node._qname);
                 }
-                callback();
+                innerCallback();
                 return;
             });
 
@@ -858,9 +870,24 @@ function loadNodesFromDisk(context, callback) {
     var nodesPath = path.normalize(pathResolve(context.dataFolderPath, "nodes"));
     var files = util.findFiles(nodesPath, "node.json");
 
+    if (!context.includeTranslations) {
+        // remove any translation nodes if not handling translations
+        files = _.filter(files, file => {
+            return !file.includes("/translations/"); 
+        });
+    }
+
     if (files && Gitana.isArray(files)) {
         for(var i = 0; i < files.length; i++) {
-            var jsonNode = loadJsonFile.sync(files[i]);            
+            var jsonNode = loadJsonFile.sync(files[i]);
+            jsonNode.__isTranslation = files[i].includes("/translations/");
+            if (jsonNode.__isTranslation) {
+                // save this translation node's parent node id
+                jsonNode.__masterNodePath = files[i].replace(/\/translations\/.+$/, "/node.json");
+                jsonNode.__masterNodeQname = loadJsonFile.sync(jsonNode.__masterNodePath)._qname;
+                jsonNode.__locale = files[i].match(/^.+\/translations\/([^\/]+)\/node\.json$/, "/node.json")[1];
+            }
+
             context.nodes.push(jsonNode);
 
             var attachmentsPath = path.normalize(pathResolve(files[i], "..", "attachments"));
@@ -994,6 +1021,11 @@ function writeRelatedNodesToBranch(nodes, context, callback) {
 
 function writeNodesToBranch(nodes, context, callback) {
     log.info("writeNodesToBranch()");
+
+    if (context.onlyTranslations) {
+        callback(null, context);
+        return;
+    }
     
     async.eachSeries(nodes, async.apply(writeNodeToBranch, context), function (err) {
         if(err)
@@ -1012,17 +1044,24 @@ function writeNodesToBranch(nodes, context, callback) {
 function writeNodeToBranch(context, node, callback) {
     log.info("writeNodeToBranch()");
 
+    if (node.__isTranslation) {
+        // translation nodes are handled separatelys
+        callback(null, context);
+        return;
+    }
+
     var existingNode = context.existingNodes[node._qname]; // look for existing node by qname first
     if (!existingNode && node._filePath) { // by path next
         existingNode = context.existingNodes[node._filePath];
-     }
+    }
+
      if (!existingNode) { // finally by type and title
         //if node doesn't have title
         let sumup =  node.title != null?  node.title.toLowerCase() : "";
         existingNode = context.existingNodes[node._type + "_" + sumup || ""];
-      }
+    }
 
-     if (existingNode) {
+    if (existingNode) {
         // update unless instructed not to
         // if (!context.overwriteExistingInstances) {
         //     log.info("Found instance node but overwrite mode is off so not updating: " + existingNode._doc);
@@ -1032,6 +1071,7 @@ function writeNodeToBranch(context, node, callback) {
 
         // _.extend(node, existingNode);
         util.updateDocumentProperties(existingNode, node);
+        delete existingNode.__isTranslation;
         
         // if (!existingNode._source_doc) {
         //     existingNode._source_doc = node._source_doc || "";
@@ -1058,6 +1098,7 @@ function writeNodeToBranch(context, node, callback) {
     else
     {
         // create
+        delete node.__isTranslation;
         context.branch.trap(function(err){
             if (err) {
                 log.warn("createNode() failed to create node: " + err + "\n" + JSON.stringify(node,null,2), context);
@@ -1065,7 +1106,7 @@ function writeNodeToBranch(context, node, callback) {
             // continue anyway so we get a list of failed nodes
             return callback(null, context);
         }).createNode(node).then(function(){ 
-            thisNode = this;
+            var thisNode = this;
             log.info("Created node " + thisNode._doc);
             util.enhanceNode(thisNode);
             // if (!thisNode._source_doc) {
@@ -1129,8 +1170,80 @@ function writeInstanceNodeToBranch(context, instanceNode, callback) {
                 return callback("createNode() " + err, context);
             }
         }).then(function(){ 
-            node = this;            
+            var node = this;            
             log.info("Created instance node " + node._doc);
+            callback(null, context);
+            return;
+        });        
+    }
+}
+
+function writeTranslationNodesToBranch(nodes, context, callback) {
+    log.info("writeTranslationNodesToBranch()");
+    
+    async.eachSeries(nodes, async.apply(writeTranslationNodeToBranch, context), function (err) {
+        if(err)
+        {
+            log.error(chalk.red("Error: " + err));
+            callback(err);
+            return;
+        }
+        
+        callback(null, context);
+        return;
+    });        
+}
+
+function writeTranslationNodeToBranch(context, node, callback) {
+    log.info("writeTranslationNodeToBranch()");
+
+    if (!node.__isTranslation) {
+        callback(null, context);
+        return;
+    }
+
+    // see if the translation already exists and update it
+    var existingNode = node._qname ? context.existingNodes[node._qname] : null;
+
+    if (existingNode) {
+        // update unless instructed not to
+        if (!context.overwriteExistingTranslations) {
+            log.info("Found translation node but overwrite mode is off so not updating: " + existingNode._doc);
+            callback(null, context);
+            return;
+        }
+
+        util.updateDocumentProperties(existingNode, node);
+        cleanTranslationNode(existingNode);
+
+        Chain(existingNode).update().reload().then(function(){
+            var thisNode = this;
+            util.enhanceNode(thisNode);
+            log.info(`Update translation node for locale ${thisNode.__locale} as node ${thisNode._doc} with type ${thisNode._type} and title ${thisNode.title || ""}`);
+            if (context.attachmentPaths[node._qname]) {
+                context.attachmentPaths[node._qname].target = thisNode;
+            }
+            callback(null, context);
+            return;
+        });        
+    }
+    else
+    {
+        // get the master node
+        var existingMasterNode = context.existingNodes[node.__masterNodeQname]; // look for existing node by qname first
+        assert(existingMasterNode);
+
+        // create translation on the master node
+        var locale = node._filePath;
+        // cleanTranslationNode(node);
+
+        Chain(existingMasterNode).createTranslation(locale, node).reload().then(function(){
+            var thisNode = this;
+            util.enhanceNode(thisNode);
+            log.info("Updated node " + thisNode._doc + " " + thisNode._type + " " + thisNode.title || "");
+            if (context.attachmentPaths[node._qname]) {
+                context.attachmentPaths[node._qname].target = thisNode;
+            }
             callback(null, context);
             return;
         });        
@@ -1735,6 +1848,9 @@ function getOptions() {
         {name: 'include-instances', alias: 'i', type: Boolean, description: 'include instance records for content type definitions'},
         {name: 'nodes', alias: 'n', type: Boolean, description: 'instead of importing definitions, import nodes in the nodes folder (and, optionally, their related nodes)'},        
         {name: 'include-related', alias: 'r', type: Boolean, description: 'include instance records referred to in relators on instance records'},        
+        {name: 'include-translations', type: Boolean, description: 'include translation records'},
+        {name: 'only-translations', type: Boolean, description: 'include only translation records and not the master node itself. Use this to sync with third party created translations'},
+        {name: 'overwrite-existing-translations', type: Boolean, description: 'when importing translations with --include-translations, existing records will not be overwritten by default. This setting will also overwrite existing records'},
         {name: 'skip-definition-validation', alias: 'k', type: Boolean, description: 'do not perform dependency checks when using --all-definitions to import definitions'},        
         {name: 'overwrite-instances', alias: 'o', type: Boolean, description: 'overwrite instance records. by default only missing records will be created. this will cause existing records to be updated as well'},
         {name: 'folder-path', alias: 'f', type: String, description: 'folder to store exported files. defaults to ./data'}
@@ -1784,6 +1900,12 @@ function printHelp(optionsList) {
                 },
                 {
                     desc: 'npx cloudcms-util import --nodes --include-related --folder-path ./data'
+                },
+                {
+                    desc: '\n4. import translation nodes only:',
+                },
+                {
+                    desc: 'npx cloudcms-util import --nodes --include-translations --only-translations --overwrite-existing-ranslations --folder-path ./data'
                 }
             ]
         }

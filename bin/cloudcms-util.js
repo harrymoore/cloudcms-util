@@ -44,6 +44,9 @@ if (script === "patch") {
 } else if (script === "mm-patch-nodes") {
     require('../cloudcms-patch-mm');
     return;
+} else if (script === "list-versions") {
+    require('../cloudcms-list-versions');
+    return;
 } else if (script === "publish") {
     require('../cloudcms-publish');
     return;
