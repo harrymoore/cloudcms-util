@@ -44,6 +44,9 @@ if (script === "patch") {
 } else if (script === "mm-patch-nodes") {
     require('../cloudcms-patch-mm');
     return;
+} else if (script === "publish") {
+    require('../cloudcms-publish');
+    return;
 } else if (script === "init") {
     init(handleOptions(script));
     return;
@@ -69,7 +72,7 @@ if (script === "patch") {
 }
 
 function printHelp() {
-    console.log(chalk.blue("Supported commands are: ") + chalk.green("\n\tinit\n\timport\n\texport\n\texport-users\n\timport-users\n\tcreate-definition\n\tcreate-form-fields\n\tcreate-node\n\tcreate-instance-node\n\tpatch-nodes"));
+    console.log(chalk.blue("Supported commands are: ") + chalk.green("\n\tinit\n\timport\n\texport\n\texport-users\n\timport-users\n\tcreate-definition\n\tcreate-form-fields\n\tcreate-node\n\tcreate-instance-node\n\tpatch-nodes\n\tdelete-nodes\n\tlist-versions\n\tpublish"));
 }
 
 function init(options) {
