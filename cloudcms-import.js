@@ -15,7 +15,6 @@ const loadJsonFile = require('load-json-file');
 const _ = require('underscore');
 const chalk = require('chalk');
 const Logger = require('basic-logger');
-const { assert } = require("console");
 const log = new Logger({
 	showMillis: false,
 	showTimestamp: true
@@ -33,12 +32,15 @@ if (process.env.NODE_ENV === "development") {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
 
+const defaultErrorHandler = Gitana.defaultErrorHandler;
 Gitana.defaultErrorHandler = function(err)
 {
     if (console && console.warn)
     {
-        console.warn("API error: " + err.message);
+        console.warn("API error: " + JSON.stringify(err, null, 4));
     }
+
+    defaultErrorHandler(err);
 };
 
 var options = handleOptions();
@@ -69,25 +71,7 @@ var option_onlyTranslations = options["only-translations"] || false;
 var option_overwriteExistingTranslations = options["overwrite-existing-translations"] || false;
 var option_nodes = options["nodes"];
 
-//
-// load gitana.json config and override credentials
-//
-var gitanaConfig = JSON.parse("" + fs.readFileSync(option_gitanaFilePath));
-if (option_useCredentialsFile) {
-    // override gitana.json credentials with username and password properties defined in the cloudcms-cli tool local db
-    var rootCredentials = JSON.parse("" + fs.readFileSync(path.join(util.homeDirectory(), ".cloudcms", "credentials.json")));
-    gitanaConfig.username = rootCredentials.username;
-    gitanaConfig.password = rootCredentials.password;
-} else if (option_prompt) {
-    // override gitana.json credentials with username and password properties entered at command prompt
-    var option_prompt = require('prompt-sync')({
-        sigint: true
-    });
-    gitanaConfig.username = option_prompt('name: ');
-    gitanaConfig.password = option_prompt.hide('password: ');
-} // else don't override credentials
-
-util.parseGitana(gitanaConfig);
+var gitanaConfig = util.getGitanaConfig(option_prompt, option_useCredentialsFile, option_gitanaFilePath);
 
 // if listing types
 if (option_listTypes) {
@@ -135,7 +119,7 @@ function handleNodeImport() {
             nodes: [],
             existingNodes: {},
             relatedNodes: [],
-            translationNodes: [],
+            existingTranslationNodes: {},
             existingRelatedNodes: [],
             attachmentPaths: {} // array of {"sourceNode": node, "targetNode: node, attachmentsPath"}
         };
@@ -146,6 +130,7 @@ function handleNodeImport() {
             async.ensureAsync(readExistingNodesFromBranch),
             async.ensureAsync(readExistingRelatedNodesFromBranchBatch),
             async.ensureAsync(readExistingRelatedNodesFromBranchByPath),
+            async.ensureAsync(readExistingTranslationNodesFromBranch),
             async.ensureAsync(async.apply(writeRelatedNodesToBranch, context.relatedNodes)),
             async.ensureAsync(resolveRelated),
             async.ensureAsync(async.apply(writeNodesToBranch, context.nodes)),
@@ -305,7 +290,9 @@ function readExistingNodesFromBranch(context, callback) {
                 log.debug("found node at path: " + node._filePath);
                 var thisNode = this;
                 util.enhanceNode(thisNode);
+                
                 context.existingNodes[node._qname] = thisNode;
+    
                 innerCallback();
                 return;
             });
@@ -444,6 +431,38 @@ function readExistingNodesFromBranchByQName(context, callback) {
         // context.existingNodes = nodes;
         callback(null, context);
     });
+}
+
+function readExistingTranslationNodesFromBranch(context, callback) {
+    log.info("readExistingTranslationNodesFromBranch()");
+
+    if (!context.includeTranslations) {
+        return callback(null, context);
+    }
+
+    async.eachSeries(context.existingNodes, function(existingNode, innerCallback) {
+        log.debug(`list translations for existing ${existingNode._type} ${existingNode._doc}`);
+        
+        if (!existingNode) {
+            innerCallback();
+            return;
+        }
+
+        context.existingTranslationNodes[existingNode._qname] = {};
+
+        Chain(existingNode).listTranslations().then(function() {
+            var translations = this.asArray();
+            log.debug("found translations for node: " + JSON.stringify(translations, null, 4));
+            translations.forEach(translation => {
+                context.existingTranslationNodes[existingNode._qname][translation.__features()["f:locale"].locale] = translation;
+            })
+            innerCallback();
+            return;
+        });
+    }, function() {
+        callback(null, context);
+        return;
+    });        
 }
 
 function readExistingRelatedNodesFromBranchBatch(context, callback) {
@@ -868,24 +887,34 @@ function loadNodesFromDisk(context, callback) {
 
     // find and load json
     var nodesPath = path.normalize(pathResolve(context.dataFolderPath, "nodes"));
-    var files = util.findFiles(nodesPath, "node.json");
+    var files = util.findFiles(nodesPath, "node.json", 2);
 
-    if (!context.includeTranslations) {
-        // remove any translation nodes if not handling translations
-        files = _.filter(files, file => {
-            return !file.includes("/translations/"); 
-        });
-    }
+    // if (!context.includeTranslations) {
+    //     // remove any translation nodes if not handling translations
+    //     files = _.filter(files, file => {
+    //         return !file.includes("/translations/"); 
+    //     });
+    // }
 
     if (files && Gitana.isArray(files)) {
         for(var i = 0; i < files.length; i++) {
             var jsonNode = loadJsonFile.sync(files[i]);
-            jsonNode.__isTranslation = files[i].includes("/translations/");
-            if (jsonNode.__isTranslation) {
-                // save this translation node's parent node id
-                jsonNode.__masterNodePath = files[i].replace(/\/translations\/.+$/, "/node.json");
-                jsonNode.__masterNodeQname = loadJsonFile.sync(jsonNode.__masterNodePath)._qname;
-                jsonNode.__locale = files[i].match(/^.+\/translations\/([^\/]+)\/node\.json$/, "/node.json")[1];
+            jsonNode.__path = files[i];
+
+            if (context.includeTranslations) {
+                // find any translations
+                var translationsPath = path.resolve(path.join(files[i], "../", "translations"))
+                var translationFiles = util.findFiles(translationsPath, "node.json", 2);
+
+                if (translationFiles && translationFiles.length) {
+                    jsonNode.__translations = {};
+                    translationFiles.forEach(translationFile => {
+                        var locale = translationFile.match(/^.+\/translations\/([^\/]+)\/node\.json$/, "/node.json")[1];
+                        var translationJsonNode = loadJsonFile.sync(translationFile);
+                        translationJsonNode.__path = translationFile;
+                        jsonNode.__translations[locale] = translationJsonNode;
+                    });
+                }
             }
 
             context.nodes.push(jsonNode);
@@ -959,6 +988,10 @@ function writeNodeAttachmentsToBranch(context, callback) {
         attachmentId = attachmentId.replace('.', '_');
         var mimetype = mime.lookup(attachmentPath.path);
 
+        if (!attachmentPath.target) {
+            log.info("no attachment path target. should not get here");
+            return callback();
+        }
         attachmentPath.target.attach(
             attachmentId,
             mimetype,
@@ -967,7 +1000,7 @@ function writeNodeAttachmentsToBranch(context, callback) {
             log.error(chalk.red("Attachment upload failed " + attachmentPath.path + " " + err));
         }).then(function(){
             log.info("Attachment upload complete");
-            callback();
+            return callback();
         });
     }, function(err){
         if (err) {
@@ -979,6 +1012,11 @@ function writeNodeAttachmentsToBranch(context, callback) {
 
 function writeAttachmentsToBranch(context, callback) {
     log.debug("writeAttachmentsToBranch()");
+
+    if (context.onlyTranslations) {
+        callback(null, context);
+        return;
+    }
 
     var nodes = context.instanceNodes.concat(context.relatedNodes);
 
@@ -1016,13 +1054,18 @@ function writeRelatedNodesToBranch(nodes, context, callback) {
         return;
     }
 
+    if (context.onlyTranslations) {
+        callback(null, context);
+        return;
+    }
+
     writeNodesToBranch(nodes, context, callback);
 }
 
 function writeNodesToBranch(nodes, context, callback) {
     log.info("writeNodesToBranch()");
 
-    if (context.onlyTranslations) {
+    if (context.includeTranslations && context.onlyTranslations) {
         callback(null, context);
         return;
     }
@@ -1041,25 +1084,33 @@ function writeNodesToBranch(nodes, context, callback) {
     });        
 }
 
+function findExistingNode(node, existingNodes) {
+    var existingNode = existingNodes[node._qname] || null; // look for existing node by qname first
+    
+    if (existingNode) {
+        return existingNode;
+    }
+
+    if (node._filePath) { // by path next
+        existingNode = existingNodes[node._filePath];
+    }
+    
+    if (existingNode) {
+        return existingNode;
+    }
+
+    // finally by type and title
+    //if node doesn't have title
+    let title =  node.title != null ?  node.title.toLowerCase() : "";
+    existingNode = existingNodes[node._type + "_" + title || ""];
+
+    return existingNode;
+}
+
 function writeNodeToBranch(context, node, callback) {
     log.info("writeNodeToBranch()");
 
-    if (node.__isTranslation) {
-        // translation nodes are handled separatelys
-        callback(null, context);
-        return;
-    }
-
-    var existingNode = context.existingNodes[node._qname]; // look for existing node by qname first
-    if (!existingNode && node._filePath) { // by path next
-        existingNode = context.existingNodes[node._filePath];
-    }
-
-     if (!existingNode) { // finally by type and title
-        //if node doesn't have title
-        let sumup =  node.title != null?  node.title.toLowerCase() : "";
-        existingNode = context.existingNodes[node._type + "_" + sumup || ""];
-    }
+    var existingNode = findExistingNode(node, context.existingNodes);
 
     if (existingNode) {
         // update unless instructed not to
@@ -1071,7 +1122,6 @@ function writeNodeToBranch(context, node, callback) {
 
         // _.extend(node, existingNode);
         util.updateDocumentProperties(existingNode, node);
-        delete existingNode.__isTranslation;
         
         // if (!existingNode._source_doc) {
         //     existingNode._source_doc = node._source_doc || "";
@@ -1098,7 +1148,6 @@ function writeNodeToBranch(context, node, callback) {
     else
     {
         // create
-        delete node.__isTranslation;
         context.branch.trap(function(err){
             if (err) {
                 log.warn("createNode() failed to create node: " + err + "\n" + JSON.stringify(node,null,2), context);
@@ -1181,73 +1230,100 @@ function writeInstanceNodeToBranch(context, instanceNode, callback) {
 function writeTranslationNodesToBranch(nodes, context, callback) {
     log.info("writeTranslationNodesToBranch()");
     
-    async.eachSeries(nodes, async.apply(writeTranslationNodeToBranch, context), function (err) {
-        if(err)
-        {
-            log.error(chalk.red("Error: " + err));
-            callback(err);
-            return;
-        }
-        
-        callback(null, context);
-        return;
-    });        
-}
-
-function writeTranslationNodeToBranch(context, node, callback) {
-    log.info("writeTranslationNodeToBranch()");
-
-    if (!node.__isTranslation) {
+    if (!context.includeTranslations) {
         callback(null, context);
         return;
     }
 
-    // see if the translation already exists and update it
-    var existingNode = node._qname ? context.existingNodes[node._qname] : null;
+    Object.values(nodes).forEach(node => {
+        async.eachSeries(Object.keys(node.__translations || {}), async.apply(writeTranslationNodeToBranch, node, context), function (err) {
+            if(err)
+            {
+                log.error(chalk.red("Error: " + err));
+                callback(err);
+                return;
+            }
+        });        
+    });            
 
-    if (existingNode) {
+    callback(null, context);
+    return;        
+}
+
+function writeTranslationNodeToBranch(localMasterNode, context, locale, callback) {
+    log.info("writeTranslationNodeToBranch()");
+
+    var existingMasterNode = findExistingNode(localMasterNode, context.existingNodes);
+    if (!existingMasterNode) {
+        // should not happen. the master node should already have been updated or created
+        return callback("master node not found", context);
+    }
+
+    var localTranslationNode = localMasterNode.__translations[locale];
+    if (!localTranslationNode) {
+        // should not happen.
+        return callback("locale not found");
+    }
+
+    // see if this locale already exists as a translation node on the master node
+    var existingTranslationNode = context.existingTranslationNodes[existingMasterNode._qname][locale] || null;
+
+    if (existingTranslationNode) {
         // update unless instructed not to
         if (!context.overwriteExistingTranslations) {
-            log.info("Found translation node but overwrite mode is off so not updating: " + existingNode._doc);
+            log.info("Found translation node but overwrite mode is off so not updating: " + existingTranslationNode._doc);
             callback(null, context);
             return;
+        } 
+        else 
+        {
+            let cleanCopy = JSON.parse(JSON.stringify(localTranslationNode));
+            cleanTranslationNode(cleanCopy);
+            util.updateDocumentProperties(existingTranslationNode, cleanCopy);
+            // util.updateDocumentProperties(existingTranslationNode, localTranslationNode);
+
+            Chain(existingTranslationNode).update().then(function(){
+                var thisNode = this;
+                util.enhanceNode(thisNode);
+                log.info(`Update translation node for locale ${thisNode.__locale} as node ${thisNode._doc} with type ${thisNode._type} and title ${thisNode.title || ""}`);
+                // if (context.attachmentPaths[masterNode._qname]) {
+                //     context.attachmentPaths[masterNode._qname].target = thisNode;
+                // }
+                callback(null, context);
+                return;
+            });                    
         }
-
-        util.updateDocumentProperties(existingNode, node);
-        cleanTranslationNode(existingNode);
-
-        Chain(existingNode).update().reload().then(function(){
-            var thisNode = this;
-            util.enhanceNode(thisNode);
-            log.info(`Update translation node for locale ${thisNode.__locale} as node ${thisNode._doc} with type ${thisNode._type} and title ${thisNode.title || ""}`);
-            if (context.attachmentPaths[node._qname]) {
-                context.attachmentPaths[node._qname].target = thisNode;
-            }
-            callback(null, context);
-            return;
-        });        
     }
     else
     {
-        // get the master node
-        var existingMasterNode = context.existingNodes[node.__masterNodeQname]; // look for existing node by qname first
-        assert(existingMasterNode);
+        // this is a new translation
 
-        // create translation on the master node
-        var locale = node._filePath;
-        // cleanTranslationNode(node);
+        // clean up the JSON before writing to the branch
+        let cleanCopy = JSON.parse(JSON.stringify(localTranslationNode));
+        cleanTranslationNode(cleanCopy);
 
-        Chain(existingMasterNode).createTranslation(locale, node).reload().then(function(){
+        Chain(existingMasterNode).createTranslation(null, locale, cleanCopy).then(function() {
             var thisNode = this;
             util.enhanceNode(thisNode);
-            log.info("Updated node " + thisNode._doc + " " + thisNode._type + " " + thisNode.title || "");
-            if (context.attachmentPaths[node._qname]) {
-                context.attachmentPaths[node._qname].target = thisNode;
-            }
+            log.info(`Created translation node ${thisNode._doc}  ${thisNode._type} ${thisNode.title}`);
+            // if (context.attachmentPaths[masterNode._qname]) {
+            //     context.attachmentPaths[masterNode._qname].target = thisNode;
+            // }
             callback(null, context);
             return;
         });        
     }
+}
+
+function cleanTranslationNode(nodeJSON) {
+    delete nodeJSON.__masterNodePath;
+    delete nodeJSON.__masterNodeQname;
+    delete nodeJSON.__locale;
+    delete nodeJSON.__path;
+    delete nodeJSON._doc;
+    delete nodeJSON._qname;
+    
+    return;
 }
 
 function writeFormsToBranch(context, callback) {
