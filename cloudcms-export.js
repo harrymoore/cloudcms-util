@@ -21,7 +21,9 @@ const log = new Logger({
 const SC_SEPARATOR = "__";
 
 // debug only when using charles proxy ssl proxy when intercepting cloudcms api calls:
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+if (process.env.NODE_ENV !== "production") {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
 
 var options = handleOptions();
 if (!options) {

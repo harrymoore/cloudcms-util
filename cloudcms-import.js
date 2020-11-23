@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-/*jshint -W069 */ 
-/*jshint -W104*/ 
+/*jshint -W069 */
+/*jshint -W104*/
 /*jshint -W083 */
 const Gitana = require("gitana");
 const fs = require("fs");
@@ -12,12 +12,13 @@ const commandLineUsage = require('command-line-usage');
 const util = require("./lib/util");
 const writeJsonFile = require('write-json-file');
 const loadJsonFile = require('load-json-file');
+const crypto = require('crypto');
 const _ = require('underscore');
 const chalk = require('chalk');
 const Logger = require('basic-logger');
 const log = new Logger({
-	showMillis: false,
-	showTimestamp: true
+    showMillis: false,
+    showTimestamp: true
 });
 const QUERY_BATCH_SIZE = 250;
 const SC_SEPARATOR = "__"; // use this in place of ':' when looking for folders/files
@@ -28,15 +29,13 @@ const isWindows = /^win/.test(process.platform);
 const pathResolve = isWindows ? path.resolve : path.posix.resolve;
 
 // debug feature. only use when using charles proxy ssl proxy for intercepting cloud cms api calls:
-if (process.env.NODE_ENV === "development") {
+if (process.env.NODE_ENV !== "production") {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
 
 const defaultErrorHandler = Gitana.defaultErrorHandler;
-Gitana.defaultErrorHandler = function(err)
-{
-    if (console && console.warn)
-    {
+Gitana.defaultErrorHandler = function (err) {
+    if (console && console.warn) {
         console.warn("API error: " + JSON.stringify(err, null, 4));
     }
 
@@ -95,15 +94,14 @@ return;
 function handleNodeImport() {
     log.debug("handleNodeImport()");
 
-    util.getBranch(gitanaConfig, option_branchId, function(err, branch, platform, stack, domain, primaryDomain, project) {
-        if (err)
-        {
+    util.getBranch(gitanaConfig, option_branchId, function (err, branch, platform, stack, domain, primaryDomain, project) {
+        if (err) {
             log.error(chalk.red("Error: ") + err);
             return;
         }
 
         log.info(chalk.yellow("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc));
-        
+
         var context = {
             branchId: option_branchId,
             branch: branch,
@@ -115,7 +113,7 @@ function handleNodeImport() {
             onlyTranslations: option_onlyTranslations,
             overwriteExistingTranslations: option_overwriteExistingTranslations,
             overwriteExistingInstances: option_overwriteExistingInstances,
-            relatedRefs: [],            
+            relatedRefs: [],
             nodes: [],
             existingNodes: {},
             relatedNodes: [],
@@ -123,7 +121,7 @@ function handleNodeImport() {
             existingRelatedNodes: [],
             attachmentPaths: {} // array of {"sourceNode": node, "targetNode: node, attachmentsPath"}
         };
-        
+
         async.waterfall([
             async.ensureAsync(async.apply(loadNodesFromDisk, context)),
             async.ensureAsync(loadRelatedNodesFromDisk),
@@ -137,32 +135,30 @@ function handleNodeImport() {
             async.ensureAsync(async.apply(writeTranslationNodesToBranch, context.nodes)),
             async.ensureAsync(writeNodeAttachmentsToBranch)
         ], function (err, context) {
-            if (err)
-            {
+            if (err) {
                 log.error(chalk.red("Error: " + err));
                 return;
             }
 
             // log.debug(JSON.stringify(context.typeDefinitions, null, 2));
-            
+
             log.info(chalk.green("Import complete"));
             return;
-        });                
+        });
     });
 }
 
 function handleImport() {
     log.debug("handleImport()");
 
-    util.getBranch(gitanaConfig, option_branchId, function(err, branch, platform, stack, domain, primaryDomain, project) {
-        if (err)
-        {
+    util.getBranch(gitanaConfig, option_branchId, function (err, branch, platform, stack, domain, primaryDomain, project) {
+        if (err) {
             log.error(chalk.red("Error: ") + err);
             return;
         }
 
         log.info(chalk.yellow("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc));
-        
+
         var context = {
             branchId: option_branchId,
             branch: branch,
@@ -196,17 +192,16 @@ function handleImport() {
             async.ensureAsync(writeInstanceNodesToBranch),
             async.ensureAsync(writeAttachmentsToBranch)
         ], function (err, context) {
-            if (err)
-            {
+            if (err) {
                 log.error(chalk.red("Error: ") + err);
                 return;
             }
 
             // log.debug(JSON.stringify(context.typeDefinitions, null, 2));
-            
+
             log.info(chalk.green("Import complete"));
             return;
-        });                
+        });
     });
 }
 
@@ -214,8 +209,8 @@ function resolveRelated(context, callback) {
     log.info("resolveRelated()");
 
     var nodes = context.nodes;
-    
-    for(var i = 0; i < nodes.length; i++) {
+
+    for (var i = 0; i < nodes.length; i++) {
         log.info("resolving refs for: " + nodes[i]._type + " " + nodes[i].title);
         resolveNodeRefs(context, nodes[i]);
     }
@@ -230,18 +225,18 @@ function resolveNodeRefs(context, node) {
     var refs = util.findKeyLocations(node, "ref", []);
     var nodes = _.values(context.existingNodes);
 
-    for(var i = 0; i < refs.length; i++) {
+    for (var i = 0; i < refs.length; i++) {
         var refId = refs[i].id;
         var refTitle = refs[i].title || "";
         var refQName = refs[i].qname || "";
         var refTypeQName = refs[i].typeQName || "";
-        
+
         if (!refId) {
             log.warn("Invalid ref. Could not resolve ref for node " + node._type + " \"" + node.title + "\" ref: " + refs[i].id + " setting title only");
             continue;
         }
 
-        Object.keys(refs[i]).forEach(function(element) {
+        Object.keys(refs[i]).forEach(function (element) {
             delete refs[i][element];
         });
 
@@ -271,9 +266,9 @@ function resolveNodeRefs(context, node) {
 function readExistingNodesFromBranch(context, callback) {
     log.info("readExistingNodesFromBranch()");
 
-    async.eachSeries(context.nodes, function(node, innerCallback){
+    async.eachSeries(context.nodes, function (node, innerCallback) {
         log.debug("query for existing node. _type:" + node._type + " title:\"" + node.title + "\"");
-        
+
         if (!node) {
             innerCallback();
             return;
@@ -281,18 +276,18 @@ function readExistingNodesFromBranch(context, callback) {
 
         if (node._filePath) {
             log.debug("query for existing node by _filePath: " + node._filePath);
-            context.branch.trap(function(){
+            context.branch.trap(function () {
                 // not found
                 log.debug("node not found for path: " + node._filePath);
                 innerCallback();
                 return;
-            }).readNode("root", node._filePath).then(function() {
+            }).readNode("root", node._filePath).then(function () {
                 log.debug("found node at path: " + node._filePath);
                 var thisNode = this;
                 util.enhanceNode(thisNode);
-                
+
                 context.existingNodes[node._qname] = thisNode;
-    
+
                 innerCallback();
                 return;
             });
@@ -303,25 +298,25 @@ function readExistingNodesFromBranch(context, callback) {
             titleRegex += node.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
             titleRegex += "$";
 
-            context.branch.trap(function(err){
+            context.branch.trap(function (err) {
                 log.debug("error looking for existing node: " + node._type + " and title:\"" + node.title + "\"");
                 log.error(chalk.red("err: " + err));
                 //     // callback();
-            //     // return;
+                //     // return;
             }).queryNodes({
-                "title": { 
+                "title": {
                     "$regex": titleRegex,
                     "$options": "i"
                 },
                 "_type": node._type
-            }).then(function() {
+            }).then(function () {
                 if (this.size() === 0) {
                     log.debug("node not found for title: " + node.title);
                     innerCallback();
                     return;
                 }
-                
-                this.keepOne().then(function() {
+
+                this.keepOne().then(function () {
                     var thisNode = this;
                     log.debug("found node for title: " + thisNode.title);
                     util.enhanceNode(thisNode);
@@ -329,20 +324,20 @@ function readExistingNodesFromBranch(context, callback) {
 
                     innerCallback();
                     return;
-                });                        
+                });
             });
 
         } else {
             log.debug("query for existing node by _qname: " + node._qname);
 
-            context.branch.trap(function(){
+            context.branch.trap(function () {
                 // not found
                 log.debug("node not found for _qname: " + node._qname);
                 innerCallback();
                 return;
             }).queryNodes({
                 _qname: node._qname
-            }).then(function() {
+            }).then(function () {
                 var nodes = this.asArray();
                 if (nodes.length > 0) {
                     log.debug("found node for _qname: " + node._qname);
@@ -357,10 +352,10 @@ function readExistingNodesFromBranch(context, callback) {
             });
 
         }
-    }, function() {
+    }, function () {
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function readExistingRelatedNodesFromBranchByPath(context, callback) {
@@ -368,29 +363,29 @@ function readExistingRelatedNodesFromBranchByPath(context, callback) {
 
     var relatedNodes = context.relatedNodes;
     var existingNodes = context.existingNodes;
-    
+
     var paths = [];
-    for(var i = 0; i < relatedNodes.length; i++) { // get a list of all the known paths for related nodes
+    for (var i = 0; i < relatedNodes.length; i++) { // get a list of all the known paths for related nodes
         var filePath = relatedNodes[i]._filePath || "";
         if (filePath && !existingNodes[filePath]) { // skip if the node at this path is already available from previous query
-            paths.push(filePath);            
+            paths.push(filePath);
         }
     }
 
-    async.eachSeries(paths, function(path, callback){
+    async.eachSeries(paths, function (path, callback) {
         log.debug("searching for node by path: " + path);
-        
+
         if (!path) {
             callback(null, context);
             return;
         }
 
-        context.branch.trap(function(){
+        context.branch.trap(function () {
             // not found
             log.info("node not found for path: " + path);
             callback(null, context);
             return;
-        }).readNode("root", path, {paths:true}).then(function() {
+        }).readNode("root", path, { paths: true }).then(function () {
             log.info("found node at path: " + path);
             var node = this;
             util.enhanceNode(node);
@@ -399,34 +394,34 @@ function readExistingRelatedNodesFromBranchByPath(context, callback) {
             return;
         });
 
-    }, function() {
+    }, function () {
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function readExistingNodesFromBranchByQName(context, callback) {
     log.info("readExistingNodesFromBranchByQName()");
 
-    var qnames = _.map(context.nodes, function(node) {
+    var qnames = _.map(context.nodes, function (node) {
         return node._qname;
     });
 
     var query = {
-        _qname: { 
+        _qname: {
             "$in": qnames
         }
     };
 
-    context.branch.queryNodes(query,{
+    context.branch.queryNodes(query, {
         limit: -1
     }
-    ).each(function() {
+    ).each(function () {
         var node = this;
         util.enhanceNode(node);
         context.existingNodes[node._qname] = node;
     }
-    ).then(function() {
+    ).then(function () {
         // var nodes = this.asArray();
         // context.existingNodes = nodes;
         callback(null, context);
@@ -440,9 +435,9 @@ function readExistingTranslationNodesFromBranch(context, callback) {
         return callback(null, context);
     }
 
-    async.eachSeries(context.existingNodes, function(existingNode, innerCallback) {
+    async.eachSeries(context.existingNodes, function (existingNode, innerCallback) {
         log.debug(`list translations for existing ${existingNode._type} ${existingNode._doc}`);
-        
+
         if (!existingNode) {
             innerCallback();
             return;
@@ -450,7 +445,7 @@ function readExistingTranslationNodesFromBranch(context, callback) {
 
         context.existingTranslationNodes[existingNode._qname] = {};
 
-        Chain(existingNode).listTranslations().then(function() {
+        Chain(existingNode).listTranslations().then(function () {
             var translations = this.asArray();
             log.debug("found translations for node: " + JSON.stringify(translations, null, 4));
             translations.forEach(translation => {
@@ -459,10 +454,10 @@ function readExistingTranslationNodesFromBranch(context, callback) {
             innerCallback();
             return;
         });
-    }, function() {
+    }, function () {
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function readExistingRelatedNodesFromBranchBatch(context, callback) {
@@ -482,102 +477,102 @@ function readExistingRelatedNodesFromBranchBatch(context, callback) {
     }
 
     var queryCount = 0;
-    async.whilst(function(){
+    async.whilst(function () {
         return queryCount < relatedRefs.length;
     },
-    async.apply(function(context, callback){
-        log.debug("query for batch of existing related _type and title: " + queryCount + " to " + (queryCount+QUERY_BATCH_SIZE-1));
-        var nodesToQuery = relatedRefs.slice(queryCount, queryCount += QUERY_BATCH_SIZE);
-    
-        nodesToQuery = _.filter(nodesToQuery, function(ref) {
-            return (
-                ref.typeQName && ref.title && ref.qname || 
-                ref.typeQName && ref.title || 
-                ref.typeQName && ref.qname || 
-                ref.qname
-            );
-        });
+        async.apply(function (context, callback) {
+            log.debug("query for batch of existing related _type and title: " + queryCount + " to " + (queryCount + QUERY_BATCH_SIZE - 1));
+            var nodesToQuery = relatedRefs.slice(queryCount, queryCount += QUERY_BATCH_SIZE);
 
-        var relatedQuery = _.map(nodesToQuery, function(ref) {
-            var q = null;
-
-            if (ref.typeQName && ref.title && ref.qname) {
-                q = {
-                    "$or": [
-                        {
-                            _type: ref.typeQName,
-                            title: { 
-                                "$regex": "^" + ref.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
-                                "$options": "i"
-                            }                    
-                        },
-                        {
-                            _qname: ref.qname
-                        }
-                    ]
-                };
-            } else if (ref.typeQName && ref.title) {
-                q = {
-                    _type: ref.typeQName,
-                    title: { 
-                        "$regex": "^" + ref.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
-                        "$options": "i"
-                    }
-                };
-            } else if (ref.typeQName && ref.qname) {
-                q = {
-                    "$or": [
-                        {
-                            _type: ref.typeQName,
-                        },
-                        {
-                            _qname: ref.qname
-                        }
-                    ]
-                };
-            } else if (ref.qname) {
-                q = {
-                    _qname: ref.qname
-                };
-            } else {
-                log.warn("Shouldn't get here. Must be bad data. " + JSON.stringify(ref,null,2));
-            }
-
-            return q;
-        });
-
-        if (!relatedQuery || !relatedQuery.length) {
-            callback(null, context);
-            return;
-        }
-
-        var query = {
-            "$or": relatedQuery
-        };
-
-        context.branch.queryNodes(query,{
-            limit: -1,
-            paths: true
-        }).then(function() {
-            var nodes = this.asArray();
-            nodes = _.map(nodes, function(node) {
-                util.enhanceNode(node);
-                context.existingNodes[node._qname] = node;
-                context.existingNodes[node._type + "_" + (node.title || "").toLowerCase()] = node;
-                if (node._filePath) {
-                    context.existingNodes[node._filePath] = node;
-                }
-                return node;
+            nodesToQuery = _.filter(nodesToQuery, function (ref) {
+                return (
+                    ref.typeQName && ref.title && ref.qname ||
+                    ref.typeQName && ref.title ||
+                    ref.typeQName && ref.qname ||
+                    ref.qname
+                );
             });
 
-            // context.existingRelatedNodes.concat(nodes);
-                
+            var relatedQuery = _.map(nodesToQuery, function (ref) {
+                var q = null;
+
+                if (ref.typeQName && ref.title && ref.qname) {
+                    q = {
+                        "$or": [
+                            {
+                                _type: ref.typeQName,
+                                title: {
+                                    "$regex": "^" + ref.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
+                                    "$options": "i"
+                                }
+                            },
+                            {
+                                _qname: ref.qname
+                            }
+                        ]
+                    };
+                } else if (ref.typeQName && ref.title) {
+                    q = {
+                        _type: ref.typeQName,
+                        title: {
+                            "$regex": "^" + ref.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
+                            "$options": "i"
+                        }
+                    };
+                } else if (ref.typeQName && ref.qname) {
+                    q = {
+                        "$or": [
+                            {
+                                _type: ref.typeQName,
+                            },
+                            {
+                                _qname: ref.qname
+                            }
+                        ]
+                    };
+                } else if (ref.qname) {
+                    q = {
+                        _qname: ref.qname
+                    };
+                } else {
+                    log.warn("Shouldn't get here. Must be bad data. " + JSON.stringify(ref, null, 2));
+                }
+
+                return q;
+            });
+
+            if (!relatedQuery || !relatedQuery.length) {
+                callback(null, context);
+                return;
+            }
+
+            var query = {
+                "$or": relatedQuery
+            };
+
+            context.branch.queryNodes(query, {
+                limit: -1,
+                paths: true
+            }).then(function () {
+                var nodes = this.asArray();
+                nodes = _.map(nodes, function (node) {
+                    util.enhanceNode(node);
+                    context.existingNodes[node._qname] = node;
+                    context.existingNodes[node._type + "_" + (node.title || "").toLowerCase()] = node;
+                    if (node._filePath) {
+                        context.existingNodes[node._filePath] = node;
+                    }
+                    return node;
+                });
+
+                // context.existingRelatedNodes.concat(nodes);
+
+                callback(null, context);
+            });
+        }, context),
+        function (err, context) {
             callback(null, context);
         });
-    }, context),
-    function(err, context) {
-        callback(null, context);
-    });
 }
 
 function readExistingRelatedNodesFromBranch(context, callback) {
@@ -589,7 +584,7 @@ function readExistingRelatedNodesFromBranch(context, callback) {
     }
 
     context.relatedRefs = util.findKeyLocations(context.nodes, "ref", []);
-    var relatedQuery = _.map(context.relatedRefs, function(ref) {
+    var relatedQuery = _.map(context.relatedRefs, function (ref) {
         var q;
         if (ref.title) {
             q = {
@@ -597,10 +592,10 @@ function readExistingRelatedNodesFromBranch(context, callback) {
                     {
                         _type: ref.typeQName,
                         // title: ref.title
-                        title: { 
+                        title: {
                             "$regex": "^" + ref.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$",
                             "$options": "i"
-                        }                    
+                        }
                     },
                     {
                         _qname: ref.qname
@@ -632,16 +627,16 @@ function readExistingRelatedNodesFromBranch(context, callback) {
         "$or": relatedQuery
     };
 
-    context.branch.queryNodes(query,{
+    context.branch.queryNodes(query, {
         limit: -1,
         paths: true
-    // }).each(function() {
-    //     var node = this;
-    //     util.enhanceNode(node);
-    //     context.existingNodes[node._qname] = node;
-    }).then(function() {
+        // }).each(function() {
+        //     var node = this;
+        //     util.enhanceNode(node);
+        //     context.existingNodes[node._qname] = node;
+    }).then(function () {
         var nodes = this.asArray();
-        nodes = _.map(nodes, function(node) {
+        nodes = _.map(nodes, function (node) {
             util.enhanceNode(node);
             context.existingNodes[node._qname] = node;
             context.existingNodes[node._type + "_" + (node.title || "").toLowerCase()] = node;
@@ -652,7 +647,7 @@ function readExistingRelatedNodesFromBranch(context, callback) {
         });
 
         // context.existingRelatedNodes.concat(nodes);
-            
+
         callback(null, context);
     });
 }
@@ -661,18 +656,18 @@ function readExistingContentInstancesFromBranch(context, callback) {
     log.debug("readExistingContentInstancesFromBranch()");
 
     var query = {
-        _qname: { 
+        _qname: {
             "$in": context.instanceQnames
         }
     };
 
-    context.branch.queryNodes(query,{
+    context.branch.queryNodes(query, {
         limit: -1
-    }).each(function() {
+    }).each(function () {
         var instance = this;
         util.enhanceNode(instance);
         context.instanceExistingNodes[instance._qname] = instance;
-    }).then(function() {
+    }).then(function () {
         var instanceNodes = this.asArray();
         // log.debug("instances: " + JSON.stringify(instanceNodes, null, 2));
         log.debug("instances count: " + instanceNodes.length);
@@ -692,14 +687,14 @@ function loadAllDefinitionsFromDisk(context, callback) {
     var definitionsPath = path.normalize(pathResolve(context.dataFolderPath, "definitions"));
     var files = util.findFiles(definitionsPath, "node.json");
     if (files && Gitana.isArray(files)) {
-        for(var i = 0; i < files.length; i++) {
+        for (var i = 0; i < files.length; i++) {
             var jsonNode = loadJsonFile.sync(files[i]);
             // jsonNode.___localSourcePath = files[i];
             context.localTypeDefinitions[jsonNode._qname] = jsonNode;
         }
 
         log.info("Type qnames found:");
-        Object.keys(context.localTypeDefinitions).forEach(function(qname) {
+        Object.keys(context.localTypeDefinitions).forEach(function (qname) {
             log.info(qname);
         });
 
@@ -713,7 +708,7 @@ function loadAllDefinitionsFromDisk(context, callback) {
             while (white.size > 0) {
                 // var it = white.values();
                 var current = white.values().next().value;
-                if(_detectCircularDependencies(context.localTypeDefinitions, current, white, gray, black)) {
+                if (_detectCircularDependencies(context.localTypeDefinitions, current, white, gray, black)) {
                     log.warn("Circular Dependency detected. The entire model may not import properly to a new project/branch in Cloud CMS");
                     // callback("Circular Dependency detected", context);
                     // return;
@@ -722,7 +717,7 @@ function loadAllDefinitionsFromDisk(context, callback) {
 
             if (gray.size > 0) {
                 log.warn("Circular Dependencies detected in the following types:");
-                gray.forEach(function(qname) {
+                gray.forEach(function (qname) {
                     log.info("\t" + qname);
                 });
             } else {
@@ -743,11 +738,11 @@ function loadAllDefinitionsFromDisk(context, callback) {
         //     }
         // }
         // log.info("Dependency Order Resolved");
-        
+
         // context.importTypeQNames = dependencyOrderedTypeDefinitions;
         context.importTypeQNames = Object.keys(context.localTypeDefinitions);
         log.info("Order of import:");
-        context.importTypeQNames.forEach(function(qname) {
+        context.importTypeQNames.forEach(function (qname) {
             log.info("\t" + qname);
         });
     }
@@ -764,7 +759,7 @@ function _detectCircularDependencies(arr, current, white, gray, black) {
         dependencies = _dependsOn(arr[current]);
     }
     log.info(current + " depends on: " + (dependencies.length ? dependencies.join(", ") : "N/A"));
-    for(i = 0; i < dependencies.length; i++) {
+    for (i = 0; i < dependencies.length; i++) {
         var neighbor = dependencies[i];
 
         // if in black set means already explored so continue.
@@ -777,7 +772,7 @@ function _detectCircularDependencies(arr, current, white, gray, black) {
             return true;
         }
 
-        if(_detectCircularDependencies(arr, neighbor, white, gray, black)) {
+        if (_detectCircularDependencies(arr, neighbor, white, gray, black)) {
             return true;
         }
     }
@@ -803,7 +798,7 @@ function _resolveDependencyOrder(typeDefinion, arr, arrKeys, resolved, resolvedK
 
     dependencies = _dependsOn(typeDefinion);
 
-    for(var i = 0; i < dependencies.length; i++) {
+    for (var i = 0; i < dependencies.length; i++) {
         var node = arr[dependencies[i]];
 
         if (!node) {
@@ -812,7 +807,7 @@ function _resolveDependencyOrder(typeDefinion, arr, arrKeys, resolved, resolvedK
         }
 
         if (!node._qname) {
-            log.warn("_resolveDependencyOrder() node has no _qname: " + JSON.stringify(node,null,2));
+            log.warn("_resolveDependencyOrder() node has no _qname: " + JSON.stringify(node, null, 2));
             continue;
         }
 
@@ -840,7 +835,7 @@ function _dependsOn(node) {
         dependencies[node._parent] = 1;
     }
     var relators = util.findKeyValues(node, "_relator", []);
-    for(var i = 0; i < relators.length; i++) {
+    for (var i = 0; i < relators.length; i++) {
         if (relators[i].nodeType && node._qname !== relators[i].nodeType && "n:node" !== relators[i].nodeType) {
             dependencies[relators[i].nodeType] = 1;
         }
@@ -865,21 +860,36 @@ function loadContentInstancesFromDisk(context, callback) {
     }
 
     var typeDefinitions = context.importTypeQNames;
-    
+
     // find and load json
-    for(var i = 0; i < typeDefinitions.length; i++) {
+    for (var i = 0; i < typeDefinitions.length; i++) {
         var instancesPath = path.normalize(pathResolve(context.dataFolderPath, "instances", typeDefinitions[i].replace(':', SC_SEPARATOR)));
         var files = util.findFiles(instancesPath, "node.json");
         if (files && Gitana.isArray(files)) {
-            for(var j = 0; j < files.length; j++) {
-                var jsonNode = loadJsonFile.sync(files[j]);            
+            for (var j = 0; j < files.length; j++) {
+                var jsonNode = loadJsonFile.sync(files[j]);
                 context.instanceNodes.push(jsonNode);
                 context.instanceQnames.push(jsonNode._qname);
-            }            
-        }        
+            }
+        }
     }
 
     return callback(null, context);
+}
+
+// if a json record does not have a qname then create one
+function getQName(jsonNode) {
+    if (jsonNode._doc) {
+        return `o:${jsonNode._doc}`;
+    }
+    if (jsonNode._type && jsonNode.title) {
+        return `o:${crypto.createHash('md5').update(jsonNode._type + jsonNode.title).digest("hex")}`;
+    }
+    if (jsonNode.__path) {
+        return `o:${crypto.createHash('md5').update(jsonNode.__path).digest("hex")}`;
+    }
+
+    return `o:${crypto.createHash('md5').update(JSON.stringify(jsonNode)).digest("hex")}`;
 }
 
 function loadNodesFromDisk(context, callback) {
@@ -889,17 +899,16 @@ function loadNodesFromDisk(context, callback) {
     var nodesPath = path.normalize(pathResolve(context.dataFolderPath, "nodes"));
     var files = util.findFiles(nodesPath, "node.json", 2);
 
-    // if (!context.includeTranslations) {
-    //     // remove any translation nodes if not handling translations
-    //     files = _.filter(files, file => {
-    //         return !file.includes("/translations/"); 
-    //     });
-    // }
-
     if (files && Gitana.isArray(files)) {
-        for(var i = 0; i < files.length; i++) {
+        for (var i = 0; i < files.length; i++) {
             var jsonNode = loadJsonFile.sync(files[i]);
             jsonNode.__path = files[i];
+            if (!jsonNode._qname) {
+                jsonNode._qname = getQName(jsonNode);
+                delete jsonNode.__path;
+                writeJsonFile.sync(files[i], jsonNode);
+                jsonNode.__path = files[i];
+            }
 
             if (context.includeTranslations) {
                 // find any translations
@@ -912,29 +921,57 @@ function loadNodesFromDisk(context, callback) {
                         var locale = translationFile.match(/^.+\/translations\/([^\/]+)\/node\.json$/, "/node.json")[1];
                         var translationJsonNode = loadJsonFile.sync(translationFile);
                         translationJsonNode.__path = translationFile;
+                        if (!translationJsonNode._qname) {
+                            translationJsonNode._qname = getQName(translationJsonNode);
+                            delete translationJsonNode.__path;
+                            writeJsonFile.sync(translationFile, translationJsonNode);
+                            translationJsonNode.__path = translationFile;
+                        }
+
                         jsonNode.__translations[locale] = translationJsonNode;
+
+                        // save path to any attachments for the translation nodes
+                        var translationAttachmentsPath = path.normalize(pathResolve(translationFile, "..", "attachments"));
+                        addAttachmentPaths(context.attachmentPaths, translationAttachmentsPath, translationJsonNode, null, {locale: locale, sourceQname: translationJsonNode._qname});
                     });
                 }
             }
 
             context.nodes.push(jsonNode);
 
-            var attachmentsPath = path.normalize(pathResolve(files[i], "..", "attachments"));
-            
-            if (attachmentsPath && fs.existsSync(attachmentsPath)) {
-                var theseFiles = fs.readdirSync(attachmentsPath);
-                for(var j = 0; j < theseFiles.length; j++) {
-                    context.attachmentPaths[jsonNode._qname] = {
-                        source: jsonNode,
-                        target: null,
-                        path: path.normalize(pathResolve(attachmentsPath, theseFiles[j]))
-                    };    
-                }
-            }            
-        }            
-    }        
+            if (!context.onlyTranslations) {
+                var attachmentsPath = path.normalize(pathResolve(files[i], "..", "attachments"));
+                addAttachmentPaths(context.attachmentPaths, attachmentsPath, jsonNode, null);
+            }
+        }
+    }
 
     return callback(null, context);
+}
+
+function addAttachmentPaths(attachmentPaths, attachmentsPath, source, target, extra) {
+    if (attachmentsPath && fs.existsSync(attachmentsPath)) {
+        var attachmentFiles = fs.readdirSync(attachmentsPath);
+        attachmentFiles.forEach(filePath => {
+            if ('' === path.extname(filePath)) {
+                return;
+            }
+
+            if (!attachmentPaths[source._qname]) {
+                attachmentPaths[source._qname] = [];
+            }
+
+            if (!extra) {
+                extra = {};
+            }
+
+            attachmentPaths[source._qname].push(_.extend({
+                source: source,
+                target: null,
+                path: path.normalize(pathResolve(attachmentsPath, filePath))
+            }, extra));
+        });
+    }
 }
 
 function loadRelatedNodesFromDisk(context, callback) {
@@ -950,24 +987,26 @@ function loadRelatedNodesFromDisk(context, callback) {
     var files = util.findFiles(nodesPath, "node.json");
 
     if (files && Gitana.isArray(files)) {
-        for(var i = 0; i < files.length; i++) {
-            var jsonNode = loadJsonFile.sync(files[i]);            
+        for (var i = 0; i < files.length; i++) {
+            var jsonNode = loadJsonFile.sync(files[i]);
             context.relatedNodes.push(jsonNode);
 
             var attachmentsPath = path.normalize(pathResolve(files[i], "..", "attachments"));
-            
-            if (attachmentsPath && fs.existsSync(attachmentsPath)) {
-                var theseFiles = fs.readdirSync(attachmentsPath);
-                for(var j = 0; j < theseFiles.length; j++) {
-                    context.attachmentPaths[jsonNode._qname] = {
-                        source: jsonNode,
-                        target: null,
-                        path: path.normalize(pathResolve(attachmentsPath, theseFiles[j]))
-                    };    
-                }
-            }            
-        }            
-    }        
+
+            addAttachmentPaths(context.attachmentPaths, attachmentsPath, jsonNode, null);
+
+            // if (attachmentsPath && fs.existsSync(attachmentsPath)) {
+            //     var theseFiles = fs.readdirSync(attachmentsPath);
+            //     for(var j = 0; j < theseFiles.length; j++) {
+            //         context.attachmentPaths[jsonNode._qname] = {
+            //             source: jsonNode,
+            //             target: null,
+            //             path: path.normalize(pathResolve(attachmentsPath, theseFiles[j]))
+            //         };    
+            //     }
+            // }            
+        }
+    }
 
     return callback(null, context);
 }
@@ -981,34 +1020,76 @@ function writeNodeAttachmentsToBranch(context, callback) {
         return;
     }
 
-    async.eachSeries(context.attachmentPaths, function(attachmentPath, callback){
-        log.info("adding attachment " + attachmentPath.path);
+    var attachmentPathArrays = Object.values(context.attachmentPaths);
+    async.eachSeries(attachmentPathArrays, async.apply(function (context, attachmentPathArray, cb2){
+        // log.info("adding attachment " + attachmentPathArray[0].path);
 
-        var attachmentId = path.basename(attachmentPath.path, path.extname(attachmentPath.path));
-        attachmentId = attachmentId.replace('.', '_');
-        var mimetype = mime.lookup(attachmentPath.path);
+        async.eachSeries(attachmentPathArray, function(attachmentPath, cb3){
+            log.info("adding attachment " + attachmentPath.path);
 
-        if (!attachmentPath.target) {
-            log.info("no attachment path target. should not get here");
-            return callback();
-        }
-        attachmentPath.target.attach(
-            attachmentId,
-            mimetype,
-            fs.readFileSync(attachmentPath.path))
-        .trap(function(err){
-            log.error(chalk.red("Attachment upload failed " + attachmentPath.path + " " + err));
-        }).then(function(){
-            log.info("Attachment upload complete");
-            return callback();
+            var attachmentId = path.basename(attachmentPath.path, path.extname(attachmentPath.path));
+            attachmentId = attachmentId.replace('.', '_');
+            var mimetype = mime.lookup(attachmentPath.path);
+
+            if (!attachmentPath.target) {
+                log.info(`no attachment path target for ${attachmentPath.path}. should not get here`);
+                return callback();
+            }
+
+            attachmentPath.target.attach(
+                attachmentId,
+                mimetype,
+                fs.readFileSync(attachmentPath.path))
+                .then(function () {
+                    log.info("Attachment upload complete");
+                    return cb3();
+                });
+
+        }, function (err) {
+            if (err) {
+                log.error(chalk.red("Error uploading attachments: " + err));
+            }
+
+            return cb2(err, context);
         });
-    }, function(err){
+
+    }, context),
+    function (err) {
         if (err) {
             log.error(chalk.red("Error uploading attachments: " + err));
         }
         return callback(err, context);
     });
 }
+
+
+// async.eachSeries(attachmentPathEntry), function (attachmentPath, callback) {
+//     log.info("adding attachment " + attachmentPath.path);
+
+//     var attachmentId = path.basename(attachmentPath.path, path.extname(attachmentPath.path));
+//     attachmentId = attachmentId.replace('.', '_');
+//     var mimetype = mime.lookup(attachmentPath.path);
+
+//     if (!attachmentPath.target) {
+//         log.info(`no attachment path target for ${attachmentPath.path}. should not get here`);
+//         return callback();
+//     }
+
+//     attachmentPath.target.attach(
+//         attachmentId,
+//         mimetype,
+//         fs.readFileSync(attachmentPath.path))
+//         .then(function () {
+//             log.info("Attachment upload complete");
+//             return callback();
+//         });
+
+// }, function (err) {
+//     if (err) {
+//         log.error(chalk.red("Error uploading attachments: " + err));
+//     }
+//     return callback(err, context);
+// }
 
 function writeAttachmentsToBranch(context, callback) {
     log.debug("writeAttachmentsToBranch()");
@@ -1024,8 +1105,8 @@ function writeAttachmentsToBranch(context, callback) {
         return callback(null, context);
     }
 
-    async.each(nodes, function(node, callback){
-        async.each(Object.keys(node.attachments || {}), function(attachment, callback){
+    async.each(nodes, function (node, callback) {
+        async.each(Object.keys(node.attachments || {}), function (attachment, callback) {
             log.debug("adding attachment " + attachment.attachmentId + " to " + node._doc);
 
             node.attach(
@@ -1033,13 +1114,13 @@ function writeAttachmentsToBranch(context, callback) {
                 mime.lookup(attachment.path),
                 fs.readFileSync(attachment.path),
                 path.basename(attachment.path))
-            .trap(function(err){
-                return callback("Attachment upload failed " + err);
-            }).then(function(){
-                console.log("Attachment upload complete");
-                callback();
-            });
-        }, function(err){
+                .trap(function (err) {
+                    return callback("Attachment upload failed " + err);
+                }).then(function () {
+                    console.log("Attachment upload complete");
+                    callback();
+                });
+        }, function (err) {
             return callback(err, context);
         });
     });
@@ -1069,24 +1150,23 @@ function writeNodesToBranch(nodes, context, callback) {
         callback(null, context);
         return;
     }
-    
+
     async.eachSeries(nodes, async.apply(writeNodeToBranch, context), function (err) {
-        if(err)
-        {
+        if (err) {
             log.error(chalk.red("Error: " + err));
             callback(err);
             return;
         }
-        
+
         log.debug("loaded nodes");
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function findExistingNode(node, existingNodes) {
     var existingNode = existingNodes[node._qname] || null; // look for existing node by qname first
-    
+
     if (existingNode) {
         return existingNode;
     }
@@ -1094,14 +1174,14 @@ function findExistingNode(node, existingNodes) {
     if (node._filePath) { // by path next
         existingNode = existingNodes[node._filePath];
     }
-    
+
     if (existingNode) {
         return existingNode;
     }
 
     // finally by type and title
     //if node doesn't have title
-    let title =  node.title != null ?  node.title.toLowerCase() : "";
+    let title = node.title != null ? node.title.toLowerCase() : "";
     existingNode = existingNodes[node._type + "_" + title || ""];
 
     return existingNode;
@@ -1122,39 +1202,38 @@ function writeNodeToBranch(context, node, callback) {
 
         // _.extend(node, existingNode);
         util.updateDocumentProperties(existingNode, node);
-        
+
         // if (!existingNode._source_doc) {
         //     existingNode._source_doc = node._source_doc || "";
         // }    
         Chain(existingNode).update()
-        // .trap(function(err){
-        //     callback("writeNodeToBranch() " + err, context);
-        //     return;
-        // })
-        .reload().then(function(){
-            var thisNode = this;
-            util.enhanceNode(thisNode);
-            // if (!thisNode._source_doc) {
-            //     thisNode._source_doc = node._source_doc || "";
-            // }
-            log.info("Updated node " + thisNode._doc + " " + thisNode._type + " " + thisNode.title || "");
-            if (context.attachmentPaths[node._qname]) {
-                context.attachmentPaths[node._qname].target = thisNode;
-            }
-            callback(null, context);
-            return;
-        });        
+            // .trap(function(err){
+            //     callback("writeNodeToBranch() " + err, context);
+            //     return;
+            // })
+            .reload().then(function () {
+                var thisNode = this;
+                util.enhanceNode(thisNode);
+                // if (!thisNode._source_doc) {
+                //     thisNode._source_doc = node._source_doc || "";
+                // }
+                log.info("Updated node " + thisNode._doc + " " + thisNode._type + " " + thisNode.title || "");
+                if (context.attachmentPaths[node._qname]) {
+                    context.attachmentPaths[node._qname].target = thisNode;
+                }
+                callback(null, context);
+                return;
+            });
     }
-    else
-    {
+    else {
         // create
-        context.branch.trap(function(err){
+        context.branch.trap(function (err) {
             if (err) {
-                log.warn("createNode() failed to create node: " + err + "\n" + JSON.stringify(node,null,2), context);
+                log.warn("createNode() failed to create node: " + err + "\n" + JSON.stringify(node, null, 2), context);
             }
             // continue anyway so we get a list of failed nodes
             return callback(null, context);
-        }).createNode(node).then(function(){ 
+        }).createNode(node).then(function () {
             var thisNode = this;
             log.info("Created node " + thisNode._doc);
             util.enhanceNode(thisNode);
@@ -1166,25 +1245,24 @@ function writeNodeToBranch(context, node, callback) {
             }
             callback(null, context);
             return;
-        });        
+        });
     }
 }
 
 function writeInstanceNodesToBranch(context, callback) {
     log.info("writeInstanceNodesToBranch()");
-    
+
     async.eachSeries(context.instanceNodes, async.apply(writeInstanceNodeToBranch, context), function (err) {
-        if(err)
-        {
+        if (err) {
             log.error(chalk.red("Error: " + err));
             callback(err);
             return;
         }
-        
+
         // log.debug("loaded");
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function writeInstanceNodeToBranch(context, instanceNode, callback) {
@@ -1198,38 +1276,37 @@ function writeInstanceNodeToBranch(context, instanceNode, callback) {
             callback(null, context);
             return;
         }
-        
+
         util.updateDocumentProperties(existingNode, instanceNode);
-        existingNode.update().trap(function(err){
+        existingNode.update().trap(function (err) {
             callback("writeDefinition() " + err, context);
             return;
-        }).then(function(){
+        }).then(function () {
             var node = this;
             util.enhanceNode(node);
             log.info("Updated instance node " + node._doc + " " + node._type + " " + node.title || "");
             callback(null, context);
             return;
-        });        
+        });
     }
-    else
-    {
+    else {
         // create
-        context.branch.createNode(instanceNode).trap(function(err){
+        context.branch.createNode(instanceNode).trap(function (err) {
             if (err) {
                 return callback("createNode() " + err, context);
             }
-        }).then(function(){ 
-            var node = this;            
+        }).then(function () {
+            var node = this;
             log.info("Created instance node " + node._doc);
             callback(null, context);
             return;
-        });        
+        });
     }
 }
 
 function writeTranslationNodesToBranch(nodes, context, callback) {
     log.info("writeTranslationNodesToBranch()");
-    
+
     if (!context.includeTranslations) {
         callback(null, context);
         return;
@@ -1237,17 +1314,16 @@ function writeTranslationNodesToBranch(nodes, context, callback) {
 
     Object.values(nodes).forEach(node => {
         async.eachSeries(Object.keys(node.__translations || {}), async.apply(writeTranslationNodeToBranch, node, context), function (err) {
-            if(err)
-            {
+            if (err) {
                 log.error(chalk.red("Error: " + err));
                 callback(err);
                 return;
             }
-        });        
-    });            
+        });
+    });
 
     callback(null, context);
-    return;        
+    return;
 }
 
 function writeTranslationNodeToBranch(localMasterNode, context, locale, callback) {
@@ -1268,50 +1344,58 @@ function writeTranslationNodeToBranch(localMasterNode, context, locale, callback
     // see if this locale already exists as a translation node on the master node
     var existingTranslationNode = context.existingTranslationNodes[existingMasterNode._qname][locale] || null;
 
+    // var attachmentsPath = path.normalize(pathResolve(localTranslationNode.__path, "..", "attachments"));
+
     if (existingTranslationNode) {
         // update unless instructed not to
         if (!context.overwriteExistingTranslations) {
             log.info("Found translation node but overwrite mode is off so not updating: " + existingTranslationNode._doc);
             callback(null, context);
             return;
-        } 
-        else 
-        {
+        }
+        else {
             let cleanCopy = JSON.parse(JSON.stringify(localTranslationNode));
             cleanTranslationNode(cleanCopy);
             util.updateDocumentProperties(existingTranslationNode, cleanCopy);
-            // util.updateDocumentProperties(existingTranslationNode, localTranslationNode);
 
-            Chain(existingTranslationNode).update().then(function(){
+            Chain(existingTranslationNode).update().then(function () {
                 var thisNode = this;
                 util.enhanceNode(thisNode);
-                log.info(`Update translation node for locale ${thisNode.__locale} as node ${thisNode._doc} with type ${thisNode._type} and title ${thisNode.title || ""}`);
-                // if (context.attachmentPaths[masterNode._qname]) {
-                //     context.attachmentPaths[masterNode._qname].target = thisNode;
-                // }
+                log.info(`Update translation node for locale ${thisNode.__features()["f:locale"].locale} as node ${thisNode._doc} with type ${thisNode._type} and title "${thisNode.title || ""}"`);
+
+                if (context.attachmentPaths[localTranslationNode._qname]) {
+                    context.attachmentPaths[existingTranslationNode.__qname()] = context.attachmentPaths[localTranslationNode._qname];
+                    delete context.attachmentPaths[localTranslationNode._qname];
+                }
+
+                // context.attachmentPaths[existingTranslationNode.__qname()] = {
+                //     path: localTranslationNode.__path,
+                //     source: localTranslationNode,
+                //     target: thisNode
+                // };
+
                 callback(null, context);
                 return;
-            });                    
+            });
         }
     }
-    else
-    {
+    else {
         // this is a new translation
 
         // clean up the JSON before writing to the branch
         let cleanCopy = JSON.parse(JSON.stringify(localTranslationNode));
         cleanTranslationNode(cleanCopy);
 
-        Chain(existingMasterNode).createTranslation(null, locale, cleanCopy).then(function() {
+        Chain(existingMasterNode).createTranslation(null, locale, cleanCopy).then(function () {
             var thisNode = this;
             util.enhanceNode(thisNode);
             log.info(`Created translation node ${thisNode._doc}  ${thisNode._type} ${thisNode.title}`);
-            // if (context.attachmentPaths[masterNode._qname]) {
-            //     context.attachmentPaths[masterNode._qname].target = thisNode;
-            // }
+            if (context.attachmentPaths[thisNode._qname]) {
+                context.attachmentPaths[thisNode._qname].target = thisNode;
+            }
             callback(null, context);
             return;
-        });        
+        });
     }
 }
 
@@ -1322,7 +1406,7 @@ function cleanTranslationNode(nodeJSON) {
     delete nodeJSON.__path;
     delete nodeJSON._doc;
     delete nodeJSON._qname;
-    
+
     return;
 }
 
@@ -1330,19 +1414,18 @@ function writeFormsToBranch(context, callback) {
     log.info("writeFormsToBranch()");
 
     var finalDefinitionNodes = context.finalDefinitionNodes;
-    
+
     async.eachSeries(finalDefinitionNodes, async.apply(writeFormToBranch, context), function (err) {
-        if(err)
-        {
+        if (err) {
             log.error(chalk.red("Error loading forms: " + err));
             callback(err);
             return;
         }
-        
+
         log.debug("loaded forms");
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function writeFormToBranch(context, definitionNode, callback) {
@@ -1355,16 +1438,15 @@ function writeFormToBranch(context, definitionNode, callback) {
     var formKeys = [];
     try {
         formKeys = fs.readdirSync(formsPath);
-    } 
-    catch(e) 
-    {
+    }
+    catch (e) {
         log.debug("no forms found for " + definitionNode._qname);
         formKeys = [];
     }
 
     var newFormNodes = [];
 
-    for(var i = 0; i < formKeys.length; i++) {
+    for (var i = 0; i < formKeys.length; i++) {
         var newFormNode = loadFormNodeFromDisk(context, definitionNode._qname.replace(':', SC_SEPARATOR), formKeys[i]);
         newFormNode.__formKey = formKeys[i].replace(SC_SEPARATOR, ':').replace(/\.json$/, '');
         newFormNodes.push(newFormNode);
@@ -1376,23 +1458,22 @@ function writeFormToBranch(context, definitionNode, callback) {
     }
 
     async.eachSeries(newFormNodes, async.apply(writeFormNodeToBranch, context, definitionNode), function (err) {
-        if(err)
-        {
+        if (err) {
             log.error(chalk.red("Error loading forms: " + err));
             callback(err);
             return;
         }
-        
+
         log.debug("loaded forms");
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function writeFormNodeToBranch(context, definitionNode, formNode, callback) {
     var thisFormKey = formNode.__formKey;
     var existingFormNodeId = null;
-    for(var i = 0; i < definitionNode.__formAssociations.length; i++) {
+    for (var i = 0; i < definitionNode.__formAssociations.length; i++) {
         if (definitionNode.__formAssociations[i]["form-key"] == thisFormKey) {
             existingFormNodeId = definitionNode.__formAssociations[i].target;
             break;
@@ -1406,74 +1487,72 @@ function writeFormNodeToBranch(context, definitionNode, formNode, callback) {
     }
 
     if (existingFormNodeId) {
-        context.branch.readNode(existingFormNodeId).trap(function(err){
+        context.branch.readNode(existingFormNodeId).trap(function (err) {
             if (err) {
                 return callback("writeFormNodeToBranch() could not load existing form node: " + thisFormKey + " _qname:" + formNode._qname + " " + err, context);
             }
-        }).then(function() {
-            var thisNode = this;      
+        }).then(function () {
+            var thisNode = this;
             log.debug("writeFormNodeToBranch update existing form node: " + existingFormNodeId);
 
             util.updateDocumentProperties(thisNode, formNode);
-            thisNode.update().trap(function(err){
+            thisNode.update().trap(function (err) {
                 callback("writeDefinition() " + err, context);
                 return;
-            }).then(function(){      
-                var newNode = this;      
+            }).then(function () {
+                var newNode = this;
                 log.info("Updated form node " + newNode._doc + " " + thisFormKey);
                 callback(null, context);
                 return;
-            });        
+            });
         });
     }
-    else
-    {
+    else {
         // create the form node and association
         delete formNode._doc;
         delete formNode._source_doc;
         delete formNode.__formKey;
         delete formNode._form_key;
 
-        context.branch.createNode(formNode).trap(function(err){
+        context.branch.createNode(formNode).trap(function (err) {
             if (err) {
                 return callback("writeDefinition() could not create form node for form key: " + thisFormKey + " " + err, context);
             }
-        }).then(function(){ 
-            thisNode = this;            
+        }).then(function () {
+            thisNode = this;
             log.info("Created form node " + thisNode._doc);
 
-            context.branch.associate(definitionNode, thisNode, {"_type": "a:has_form", "form-key": thisFormKey}).then(function(){      
-                var thisAssociationNode = this;      
+            context.branch.associate(definitionNode, thisNode, { "_type": "a:has_form", "form-key": thisFormKey }).then(function () {
+                var thisAssociationNode = this;
                 log.info("Associated definition node to form node: " + thisAssociationNode._doc + " using form key: " + thisFormKey);
                 callback(null, context);
                 return;
-            });  
+            });
 
-        });        
-    }    
+        });
+    }
 }
 
 function writePlaceholderDefinitionsToBranch(context, callback) {
     log.debug("writePlaceholderDefinitionsToBranch()");
 
     var typeDefinitions = context.importTypeQNames;
-    
+
     async.eachSeries(typeDefinitions, async.apply(writePlaceholderDefinitionToBranch, context), function (err) {
-        if(err)
-        {
+        if (err) {
             log.error(chalk.red("Error: " + err));
             callback(err);
             return;
         }
-        
+
         log.debug("done writing placeholder definitions");
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function writePlaceholderDefinitionToBranch(context, definitionQname, callback) {
-    for(var i = 0; i < context.typeDefinitions.length; i++) {
+    for (var i = 0; i < context.typeDefinitions.length; i++) {
         if (context.typeDefinitions[i]._qname == definitionQname) {
             // definiion already exists in the branch
             callback(null, context);
@@ -1487,8 +1566,7 @@ function writePlaceholderDefinitionToBranch(context, definitionQname, callback) 
         callback(null, context);
         return;
     }
-    else
-    {
+    else {
         // create
         log.debug("Creating placeholder definition node " + newDefinitionNode._qname + " " + newDefinitionNode.title);
 
@@ -1497,18 +1575,18 @@ function writePlaceholderDefinitionToBranch(context, definitionQname, callback) 
             _qname: newDefinitionNode._qname,
             title: newDefinitionNode.title,
             properties: {}
-        }).trap(function(err){
+        }).trap(function (err) {
             if (err) {
                 return callback("createNode() " + err, context);
             }
-        }).then(function(){ 
+        }).then(function () {
             definitionNode = this;
             util.enhanceNode(definitionNode);
             context.typeDefinitions.push(definitionNode);
             log.info("Created placeholder definition node " + definitionNode._doc + " " + definitionNode._qname + " " + definitionNode.title);
             callback(null, context);
             return;
-        });        
+        });
     }
 }
 
@@ -1516,26 +1594,25 @@ function writeDefinitionsToBranch(context, callback) {
     log.debug("writeDefinitionsToBranch()");
 
     var typeDefinitions = context.importTypeQNames;
-    
+
     async.eachSeries(typeDefinitions, async.apply(writeDefinitionToBranch, context), function (err) {
-        if(err)
-        {
+        if (err) {
             log.error(chalk.red("Error: " + err));
             callback(err);
             return;
         }
-        
+
         log.debug("done writing definitions to branch");
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function writeDefinitionToBranch(context, definitionQname, callback) {
     log.debug("writeDefinitionToBranch() " + definitionQname);
 
     var definitionNode = null;
-    for(var i = 0; i < context.typeDefinitions.length; i++) {
+    for (var i = 0; i < context.typeDefinitions.length; i++) {
         if (context.typeDefinitions[i]._qname == definitionQname) {
             // definiion exists in branch so updated it
             definitionNode = context.typeDefinitions[i];
@@ -1550,43 +1627,42 @@ function writeDefinitionToBranch(context, definitionQname, callback) {
 
         delete newDefinitionNode._doc;
         delete newDefinitionNode._qname;
-        
-        util.updateDocumentProperties(definitionNode, JSON.parse(JSON.stringify(newDefinitionNode,null,1)));
-        
+
+        util.updateDocumentProperties(definitionNode, JSON.parse(JSON.stringify(newDefinitionNode, null, 1)));
+
         delete definitionNode._source_doc;
-        
-        definitionNode.update().trap(function(err){
+
+        definitionNode.update().trap(function (err) {
             callback("writeDefinition() " + err, context);
             return;
-        }).then(function(){      
+        }).then(function () {
             var newNode = this;
-            util.enhanceNode(newNode);         
+            util.enhanceNode(newNode);
             context.finalDefinitionNodes.push(newNode);
             log.info("Updated definition node " + newNode._doc + " " + newNode._qname + " " + newNode.title);
             callback(null, context);
             return;
-        });        
+        });
     }
-    else
-    {
+    else {
         // create
         log.debug("Creating definition node " + newDefinitionNode._qname + " " + newDefinitionNode.title);
 
         delete newDefinitionNode._source_doc;
         delete newDefinitionNode._doc;
 
-        context.branch.createNode(newDefinitionNode).trap(function(err){
+        context.branch.createNode(newDefinitionNode).trap(function (err) {
             if (err) {
                 return callback("createNode() " + err, context);
             }
-        }).then(function(){ 
-            definitionNode = this;   
-            util.enhanceNode(definitionNode);         
+        }).then(function () {
+            definitionNode = this;
+            util.enhanceNode(definitionNode);
             context.finalDefinitionNodes.push(definitionNode);
             log.info("Created definition node " + definitionNode._doc + " " + definitionNode._qname + " " + definitionNode.title);
             callback(null, context);
             return;
-        });        
+        });
     }
 }
 
@@ -1597,16 +1673,16 @@ function loadDefinitionNodeFromDisk(context, definitionQname) {
     }
 
     try {
-        var jsonNode = loadJsonFile.sync(buildDefinitionPath(context.dataFolderPath, {_qname: definitionQname}));
-        return jsonNode;    
-    } catch(e) {
+        var jsonNode = loadJsonFile.sync(buildDefinitionPath(context.dataFolderPath, { _qname: definitionQname }));
+        return jsonNode;
+    } catch (e) {
         log.error(chalk.red(e));
         throw e;
     }
 }
 
 function loadFormNodeFromDisk(context, definitionQname, formKey) {
-    var jsonNode = loadJsonFile.sync(buildFormPath(context.dataFolderPath, {_qname: definitionQname}, formKey));
+    var jsonNode = loadJsonFile.sync(buildFormPath(context.dataFolderPath, { _qname: definitionQname }, formKey));
     return jsonNode;
 }
 
@@ -1615,9 +1691,9 @@ function writeContentInstanceJSONtoDisk(context, callback) {
 
     var instanceNodes = context.instanceNodes;
     var dataFolderPath = path.posix.normalize(context.dataFolderPath);
-    
-    Object.keys(instanceNodes).forEach(function(type) {
-        for(var i = 0; i < instanceNodes[type].length; i++) {
+
+    Object.keys(instanceNodes).forEach(function (type) {
+        for (var i = 0; i < instanceNodes[type].length; i++) {
             // var node = cleanNode(instanceNodes[type][i], "x");
             var node = cleanNode(instanceNodes[type][i]);
             writeJsonFile.sync(buildInstancePath(dataFolderPath, node), node);
@@ -1647,17 +1723,16 @@ function getContentInstances(context, callback) {
     }
 
     async.eachSeries(typeDefinitions, async.apply(getDefinitionInstances, context), function (err) {
-        if(err)
-        {
+        if (err) {
             log.error(chalk.red("Error: " + err));
             callback(err);
             return;
         }
-        
+
         log.debug("loaded definition instances");
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function getDefinitionInstances(context, typeDefinitionNode, callback) {
@@ -1671,13 +1746,13 @@ function getDefinitionInstances(context, typeDefinitionNode, callback) {
         context.instanceNodes[typeDefinitionNode._qname] = [];
     }
 
-    context.branch.queryNodes(query,{
+    context.branch.queryNodes(query, {
         limit: -1
-    }).each(function() {
+    }).each(function () {
         var instance = this;
         util.enhanceNode(instance);
         context.instanceNodes[typeDefinitionNode._qname].push(instance);
-    }).then(function() {
+    }).then(function () {
         // log.debug("instances: " + JSON.stringify(context.instanceNodes, null, 2));
         log.debug("instances count: " + context.instanceNodes.length);
         callback(null, context);
@@ -1686,10 +1761,9 @@ function getDefinitionInstances(context, typeDefinitionNode, callback) {
 
 function handleListTypes() {
     log.debug("handleListTypes()");
-    
+
     util.getBranch(gitanaConfig, option_branchId, function (err, branch, platform, stack, domain, primaryDomain, project) {
-        if (err)
-        {
+        if (err) {
             log.debug("Error connecting to Cloud CMS branch: " + err);
             return;
         }
@@ -1701,20 +1775,19 @@ function handleListTypes() {
             branch: branch,
             typeDefinitions: []
         };
-        
-        getBranchDefinitions(context, function(err, context) {
-            if (err)
-            {
+
+        getBranchDefinitions(context, function (err, context) {
+            if (err) {
                 log.error(chalk.red("Error listing definition nodes: " + err));
                 return;
             }
 
-            Object.keys(context.typeDefinitions).forEach(function(type) {
+            Object.keys(context.typeDefinitions).forEach(function (type) {
                 log.debug(JSON.stringify(context.typeDefinitions[type]));
                 console.log("type: " + context.typeDefinitions[type]._type + "\t_qname: " + context.typeDefinitions[type]._qname + "\tTitle: \"" + context.typeDefinitions[type].title + "\"");
             });
 
-            console.log("\ndone");            
+            console.log("\ndone");
         });
     });
 }
@@ -1726,7 +1799,7 @@ function writeDefinitionJSONtoDisk(context, callback) {
 
     dataFolderPath = path.posix.normalize(dataFolderPath);
     if (fs.existsSync(dataFolderPath)) {
-        Object.keys(typeDefinitions).forEach(function(typeId) {
+        Object.keys(typeDefinitions).forEach(function (typeId) {
             log.debug(JSON.stringify(typeDefinitions[typeId]));
             writeFormJsontoDisk(dataFolderPath, typeDefinitions[typeId]);
             var node = cleanNode(typeDefinitions[typeId]);
@@ -1737,8 +1810,7 @@ function writeDefinitionJSONtoDisk(context, callback) {
         callback(null, context);
         return;
     }
-    else
-    {
+    else {
         callback("folder path not found: " + dataFolderPath);
         return;
     }
@@ -1763,7 +1835,7 @@ function buildFormPath(dataFolderPath, node, formKey) {
 function cleanNode(node, qnameMod) {
     var n = node;
     util.enhanceNode(n);
-    
+
     n._source_doc = n._doc;
     n._qname += qnameMod || "";
     delete n._doc;
@@ -1771,7 +1843,7 @@ function cleanNode(node, qnameMod) {
     delete n.attachments;
     delete n.__forms;
     delete n.__formAssociations;
-    
+
     return n;
 }
 
@@ -1805,17 +1877,17 @@ function getBranchDefinitions(context, callback) {
         }
     }
 
-    context.branch.queryNodes(query,{
+    context.branch.queryNodes(query, {
         limit: -1,
         sort: {
             _type: 1,
             title: 1
         }
-    }).each(function() {
+    }).each(function () {
         var definition = this;
         util.enhanceNode(definition);
         context.typeDefinitions.push(definition);
-    }).then(function() {
+    }).then(function () {
         // log.debug("definitions: " + JSON.stringify(context.typeDefinitions, null, 2));
         log.debug("definitions count: " + context.typeDefinitions.length);
         callback(null, context);
@@ -1825,11 +1897,11 @@ function getBranchDefinitions(context, callback) {
 function readDefinition(context, callback) {
     log.debug("readDefinition()");
 
-    context.branch.readDefinition().each(function() {
+    context.branch.readDefinition().each(function () {
         var definition = this;
         util.enhanceNode(definition);
         context.typeDefinitions.push(definition);
-    }).then(function() {
+    }).then(function () {
         // log.debug("definitions: " + JSON.stringify(context.typeDefinitions, null, 2));
         log.debug("definitions count: " + context.typeDefinitions.length);
         callback(null, context);
@@ -1847,17 +1919,16 @@ function getDefinitionForms(context, callback) {
     }
 
     async.eachSeries(typeDefinitions, getDefinitionFormList, function (err) {
-        if(err)
-        {
+        if (err) {
             log.error(chalk.red("Error reading definition forms: " + err));
             callback(err);
             return;
         }
-        
+
         log.debug("loaded definition forms");
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function getDefinitionFormAssociations(context, callback) {
@@ -1871,17 +1942,16 @@ function getDefinitionFormAssociations(context, callback) {
     }
 
     async.eachSeries(typeDefinitions, getDefinitionFormAssociationList, function (err) {
-        if(err)
-        {
+        if (err) {
             log.error(chalk.red("Error reading definition form associations: " + err));
             callback(err);
             return;
         }
-        
+
         log.debug("loaded definition form associations");
         callback(null, context);
         return;
-    });        
+    });
 }
 
 function getDefinitionFormList(typeDefinitionNode, callback) {
@@ -1890,7 +1960,7 @@ function getDefinitionFormList(typeDefinitionNode, callback) {
     typeDefinitionNode.listRelatives({
         "type": "a:has_form",
         "direction": "OUTGOING"
-    }).then(function() {
+    }).then(function () {
         log.debug("relatives: " + JSON.stringify(this, null, 2));
         typeDefinitionNode.__forms = this.asArray();
         callback();
@@ -1903,7 +1973,7 @@ function getDefinitionFormAssociationList(typeDefinitionNode, callback) {
     typeDefinitionNode.associations({
         "type": "a:has_form",
         "direction": "OUTGOING"
-    }).then(function() {
+    }).then(function () {
         log.debug("associations: " + JSON.stringify(this, null, 2));
         typeDefinitionNode.__formAssociations = this.asArray();
         callback();
@@ -1912,24 +1982,24 @@ function getDefinitionFormAssociationList(typeDefinitionNode, callback) {
 
 function getOptions() {
     return [
-        {name: 'help', alias: 'h', type: Boolean},
-        {name: 'verbose', alias: 'v', type: Boolean, description: 'verbose logging'},
-        {name: 'prompt', alias: 'p', type: Boolean, description: 'prompt for username and password. overrides gitana.json credentials'},
-        {name: 'use-credentials-file', alias: 'c', type: Boolean, description: 'use credentials file ~/.cloudcms/credentials.json. overrides gitana.json credentials'},
-        {name: 'gitana-file-path', alias: 'g', type: String, description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json'},
-        {name: 'branch', alias: 'b', type: String, description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"'},
-        {name: 'list-types', alias: 'l', type: Boolean, description: 'list type definitions available in the branch'},
-        {name: 'definition-qname', alias: 'q', type: String, multiple: true, description: '_qname of the type definition'},
-        {name: 'all-definitions', alias: 'a', type: Boolean, description: 'import all locally defined definitions. Or use --definition-qname'},
-        {name: 'include-instances', alias: 'i', type: Boolean, description: 'include instance records for content type definitions'},
-        {name: 'nodes', alias: 'n', type: Boolean, description: 'instead of importing definitions, import nodes in the nodes folder (and, optionally, their related nodes)'},        
-        {name: 'include-related', alias: 'r', type: Boolean, description: 'include instance records referred to in relators on instance records'},        
-        {name: 'include-translations', type: Boolean, description: 'include translation records'},
-        {name: 'only-translations', type: Boolean, description: 'include only translation records and not the master node itself. Use this to sync with third party created translations'},
-        {name: 'overwrite-existing-translations', type: Boolean, description: 'when importing translations with --include-translations, existing records will not be overwritten by default. This setting will also overwrite existing records'},
-        {name: 'skip-definition-validation', alias: 'k', type: Boolean, description: 'do not perform dependency checks when using --all-definitions to import definitions'},        
-        {name: 'overwrite-instances', alias: 'o', type: Boolean, description: 'overwrite instance records. by default only missing records will be created. this will cause existing records to be updated as well'},
-        {name: 'folder-path', alias: 'f', type: String, description: 'folder to store exported files. defaults to ./data'}
+        { name: 'help', alias: 'h', type: Boolean },
+        { name: 'verbose', alias: 'v', type: Boolean, description: 'verbose logging' },
+        { name: 'prompt', alias: 'p', type: Boolean, description: 'prompt for username and password. overrides gitana.json credentials' },
+        { name: 'use-credentials-file', alias: 'c', type: Boolean, description: 'use credentials file ~/.cloudcms/credentials.json. overrides gitana.json credentials' },
+        { name: 'gitana-file-path', alias: 'g', type: String, description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json' },
+        { name: 'branch', alias: 'b', type: String, description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"' },
+        { name: 'list-types', alias: 'l', type: Boolean, description: 'list type definitions available in the branch' },
+        { name: 'definition-qname', alias: 'q', type: String, multiple: true, description: '_qname of the type definition' },
+        { name: 'all-definitions', alias: 'a', type: Boolean, description: 'import all locally defined definitions. Or use --definition-qname' },
+        { name: 'include-instances', alias: 'i', type: Boolean, description: 'include instance records for content type definitions' },
+        { name: 'nodes', alias: 'n', type: Boolean, description: 'instead of importing definitions, import nodes in the nodes folder (and, optionally, their related nodes)' },
+        { name: 'include-related', alias: 'r', type: Boolean, description: 'include instance records referred to in relators on instance records' },
+        { name: 'include-translations', type: Boolean, description: 'include translation records' },
+        { name: 'only-translations', type: Boolean, description: 'include only translation records and not the master node itself. Use this to sync with third party created translations' },
+        { name: 'overwrite-existing-translations', type: Boolean, description: 'when importing translations with --include-translations, existing records will not be overwritten by default. This setting will also overwrite existing records' },
+        { name: 'skip-definition-validation', alias: 'k', type: Boolean, description: 'do not perform dependency checks when using --all-definitions to import definitions' },
+        { name: 'overwrite-instances', alias: 'o', type: Boolean, description: 'overwrite instance records. by default only missing records will be created. this will cause existing records to be updated as well' },
+        { name: 'folder-path', alias: 'f', type: String, description: 'folder to store exported files. defaults to ./data' }
     ];
 }
 
@@ -1937,8 +2007,7 @@ function handleOptions() {
 
     var options = cliArgs(getOptions());
 
-    if (_.isEmpty(options) || options.help)
-    {
+    if (_.isEmpty(options) || options.help) {
         printHelp(getOptions());
         return null;
     }
