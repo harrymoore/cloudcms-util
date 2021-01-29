@@ -29,6 +29,9 @@ if (script === "patch") {
 } else if (script === "export") {
     require('../cloudcms-export');
     return;
+} else if (script === "ers-export") {
+    require('../cloudcms-export-ers');
+    return;
 } else if (script === "export-users") {
     require('../cloudcms-user-export');
     return;

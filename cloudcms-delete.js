@@ -32,6 +32,7 @@ var option_useCredentialsFile = options["use-credentials-file"];
 var option_gitanaFilePath = options["gitana-file-path"] || "./gitana.json";
 var option_branchId = options["branch"] || "master";
 var option_queryFilePath = options["query-file-path"];
+var option_refresh = options["refresh"];
 
 //
 // load gitana.json config and override credentials
@@ -44,11 +45,11 @@ if (option_useCredentialsFile) {
     gitanaConfig.password = rootCredentials.password;
 } else if (option_prompt) {
     // override gitana.json credentials with username and password properties entered at command prompt
-    var option_prompt = require('prompt-sync')({
+    var prompt = require('prompt-sync')({
         sigint: true
     });
-    gitanaConfig.username = option_prompt('name: ');
-    gitanaConfig.password = option_prompt.hide('password: ');
+    gitanaConfig.username = prompt('name: ');
+    gitanaConfig.password = prompt.hide('password: ');
 } // else don't override credentials
 
 var handled = false;
@@ -83,6 +84,7 @@ function handleDelete() {
         var context = {
             branchId: option_branchId,
             branch: branch,
+            refresh: option_refresh,
             queryFilePath: option_queryFilePath,
             query: require(option_queryFilePath),
             nodes: []
@@ -90,6 +92,7 @@ function handleDelete() {
         
         async.waterfall([
             async.ensureAsync(async.apply(getNodesFromQuery, context)),
+            async.ensureAsync(refreshNodes),
             async.ensureAsync(deleteNodes)
         ], function (err, context) {
             if (err)
@@ -108,6 +111,7 @@ function getNodesFromQuery(context, callback) {
     log.info("getNodesFromQuery()");
 
     var query = context.query;
+    query._fields = {};
 
     context.branch.queryNodes(query,{
         limit: -1
@@ -121,12 +125,41 @@ function getNodesFromQuery(context, callback) {
     });
 }
 
+function refreshNodes(context, callback) {
+    log.info("refreshNodes()");
+
+    if (!context.refresh) {
+        return callback(null, context);
+    }
+
+    var nodes = context.nodes;
+
+    async.eachLimit(nodes, 5, function(node, cb) {
+        log.info("refreshing " + node._doc);
+        
+        Chain(node).refresh().then(function() {            
+            cb();
+        });
+    }, function (err) {
+        if(err)
+        {
+            log.error("Error: " + err);
+            callback(err);
+            return;
+        }
+        
+        log.debug("done");
+        callback(null, context);
+        return;
+    });        
+}
+
 function deleteNodes(context, callback) {
     log.info("deleteNodes()");
 
     var nodes = context.nodes;
 
-    async.eachSeries(nodes, function(node, cb) {
+    async.eachLimit(nodes, 5, function(node, cb) {
         log.info("deleting " + node._doc);
         
         Chain(node).del().then(function() {            
@@ -152,6 +185,7 @@ function getOptions() {
         {name: 'verbose',               alias: 'v', type: Boolean, description: 'verbose logging'},
         {name: 'prompt',                alias: 'p', type: Boolean, description: 'prompt for username and password. overrides gitana.json credentials'},
         {name: 'use-credentials-file',  alias: 'c', type: Boolean, description: 'use credentials file ~/.cloudcms/credentials.json. overrides gitana.json credentials'},
+        {name: 'refresh',               alias: 'r', type: Boolean, description: 'perform a refresh api call on each node before deleting. this can cleanup any bad associations which would prevent the delete'},
         {name: 'gitana-file-path',      alias: 'g', type: String, description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json'},
         {name: 'branch',                alias: 'b', type: String, description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"'},
         {name: 'query-file-path',       alias: 'y', type: String, description: 'path to a json file defining the query'}
