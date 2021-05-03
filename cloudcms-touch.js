@@ -7,6 +7,7 @@ var request = require("request");
 var cliArgs = require('command-line-args');
 const commandLineUsage = require('command-line-usage')
 var fs = require("fs");
+var path = require("path");
 var util = require("./lib/util");
 var Logger = require('basic-logger');
 var log = new Logger({
@@ -31,7 +32,7 @@ var option_prompt = options["prompt"];
 var option_useCredentialsFile = options["use-credentials-file"];
 var option_gitanaFilePath = options["gitana-file-path"] || "./gitana.json";
 var option_branchId = options["branch"] || "master";
-var option_queryFilePath = options["query-file-path"];
+var option_queryFilePath = path.join(process.env.PWD, options["query-file-path"]);
 var option_deleteDupQNames = options["delete-dup-qnames"];
 var option_repositoryId = options["repository"];
 var option_userName = options["username"];
@@ -183,12 +184,12 @@ function touchNodes(context, callback) {
     }, function (err) {
         if(err)
         {
-            log.error("Error loading forms: " + err);
+            log.error("error: " + err);
             callback(err);
             return;
         }
         
-        log.debug("loaded forms");
+        log.debug("touch complete");
         callback(null, context);
         return;
     });        
@@ -203,7 +204,7 @@ function getOptions() {
         {name: 'gitana-file-path',      alias: 'g', type: String, description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json'},
         {name: 'branch',                alias: 'b', type: String, description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"'},
         {name: 'query-file-path',       alias: 'y', type: String, description: 'path to a json file defining the query'},
-        {name: 'delete-dup-qnames',     alias: 'd', type: Boolean, multiple: true, description: 'direct call to the api server to clean up duplicate qnames before touching nodes. requires --qname --branch (even if master) and --repository options.'},
+        // {name: 'delete-dup-qnames',     alias: 'd', type: Boolean, multiple: true, description: 'direct call to the api server to clean up duplicate qnames before touching nodes. requires --qname --branch (even if master) and --repository options.'},
         {name: 'repository',            alias: 'r', type: String, description: 'repository id where duplicate qnames will be repaired"'},
         {name: 'username',            alias: 'u', type: String, description: 'api server admin user name"'},
         {name: 'password',            alias: 'w', type: String, description: 'api server admin password"'},

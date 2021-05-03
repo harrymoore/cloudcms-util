@@ -68,6 +68,9 @@ if (script === "patch") {
 } else if (script === "create-node") {
     createNode(handleOptions(script));
     return;
+} else if (script === "touch") {
+    require('../cloudcms-touch');
+    return;
 } else if (script === "-h" || script === "--help") {
     printHelp(handleOptions(script));
     return;
