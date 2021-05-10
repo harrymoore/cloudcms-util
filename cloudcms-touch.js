@@ -178,7 +178,10 @@ function touchNodes(context, callback) {
     async.eachSeries(nodes, function(node, cb) {
         log.info("touching " + node._doc);
         
-        Chain(node).touch().then(function() {            
+        Chain(node).trap(function(err) {
+            log.warn("warning: " + JSON.stringify(err));
+            cb();
+        }).touch().then(function() {            
             cb();
         });
     }, function (err) {
