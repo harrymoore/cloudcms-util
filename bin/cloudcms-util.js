@@ -23,6 +23,11 @@ if (script === "patch") {
     let cmd = new Command();
     cmd.exec();
     return;
+} else if (script === "report-multiple-parents") {
+    const Command = require('../ReportMultipleParents');
+    let cmd = new Command();
+    cmd.exec();
+    return;
 } else if (script === "import") {
     require('../cloudcms-import');
     return;
