@@ -29,7 +29,7 @@ const isWindows = /^win/.test(process.platform);
 const pathResolve = isWindows ? path.resolve : path.posix.resolve;
 
 // debug feature. only use when using charles proxy ssl proxy for intercepting cloud cms api calls:
-if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV === "dev" || process.env.NODE_ENV === "development") {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
 
@@ -66,9 +66,12 @@ var option_overwriteExistingInstances = options["overwrite-instances"] || false;
 var option_dataFolderPath = options["folder-path"] || "./data";
 var option_includeRelated = options["include-related"] || false;
 var option_includeTranslations = options["include-translations"] || false;
+var option_includeTags = options["include-tags"] || false;
 var option_onlyTranslations = options["only-translations"] || false;
 var option_overwriteExistingTranslations = options["overwrite-existing-translations"] || false;
+var option_overwriteSystemDefinitions = options["overwrite-system-definitions"] || false;
 var option_nodes = options["nodes"];
+var option_useTracingFeature = options["use-tracing-feature"] || false;
 
 var gitanaConfig = util.getGitanaConfig(option_prompt, option_useCredentialsFile, option_gitanaFilePath);
 
@@ -103,6 +106,7 @@ function handleNodeImport() {
         log.info(chalk.yellow("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc));
 
         var context = {
+            finishedEarly: false,
             branchId: option_branchId,
             branch: branch,
             platformId: platform.getId(),
@@ -110,9 +114,13 @@ function handleNodeImport() {
             dataFolderPath: option_dataFolderPath,
             includeRelated: option_includeRelated,
             includeTranslations: option_includeTranslations,
+            includeTags: option_includeTags,
+            existingTagNodes: {},
             onlyTranslations: option_onlyTranslations,
+            useTracingFeature: option_useTracingFeature,
             overwriteExistingTranslations: option_overwriteExistingTranslations,
             overwriteExistingInstances: option_overwriteExistingInstances,
+            overwriteSystemDefinitions: option_overwriteSystemDefinitions,
             relatedRefs: [],
             nodes: [],
             existingNodes: {},
@@ -126,6 +134,7 @@ function handleNodeImport() {
             async.ensureAsync(async.apply(loadNodesFromDisk, context)),
             async.ensureAsync(loadRelatedNodesFromDisk),
             async.ensureAsync(readExistingNodesFromBranch),
+            // async.ensureAsync(readExistingTagsFromBranch),
             async.ensureAsync(readExistingRelatedNodesFromBranchBatch),
             async.ensureAsync(readExistingRelatedNodesFromBranchByPath),
             async.ensureAsync(readExistingTranslationNodesFromBranch),
@@ -135,7 +144,12 @@ function handleNodeImport() {
             async.ensureAsync(async.apply(writeTranslationNodesToBranch, context.nodes)),
             async.ensureAsync(writeNodeAttachmentsToBranch)
         ], function (err, context) {
-            if (err) {
+            if (err && context && context.finishedEarly) {
+                log.info(chalk.yellow("Import complete: ") + err);
+                return;
+            }
+
+           if (err) {
                 log.error(chalk.red("Error: " + err));
                 return;
             }
@@ -160,6 +174,7 @@ function handleImport() {
         log.info(chalk.yellow("connected to project: \"" + project.title + "\" and branch: " + branch.title || branch._doc));
 
         var context = {
+            finishedEarly: false,
             branchId: option_branchId,
             branch: branch,
             allDefinitions: option_allDefinitions,
@@ -169,10 +184,13 @@ function handleImport() {
             dataFolderPath: option_dataFolderPath,
             includeRelated: option_includeRelated,
             includeTranslations: option_includeTranslations,
+            includeTags: option_includeTags,
+            existingTagNodes: {},
             onlyTranslations: option_onlyTranslations,
             overwriteExistingTranslations: option_overwriteExistingTranslations,
             includeInstances: option_includeInstances,
             overwriteExistingInstances: option_overwriteExistingInstances,
+            overwriteSystemDefinitions: option_overwriteSystemDefinitions,
             instanceNodes: [],
             instanceExistingNodes: {},
             instanceQnames: [],
@@ -183,6 +201,7 @@ function handleImport() {
         async.waterfall([
             async.apply(loadAllDefinitionsFromDisk, context),
             async.ensureAsync(getBranchDefinitions),
+            // async.ensureAsync(readExistingTagsFromBranch),
             async.ensureAsync(writePlaceholderDefinitionsToBranch),
             async.ensureAsync(writeDefinitionsToBranch),
             async.ensureAsync(getDefinitionFormAssociations),
@@ -192,6 +211,11 @@ function handleImport() {
             async.ensureAsync(writeInstanceNodesToBranch),
             async.ensureAsync(writeAttachmentsToBranch)
         ], function (err, context) {
+            if (err && context && context.finishedEarly) {
+                log.info(chalk.yellow("Import complete: ") + err);
+                return;
+            }
+
             if (err) {
                 log.error(chalk.red("Error: ") + err);
                 return;
@@ -652,6 +676,29 @@ function readExistingRelatedNodesFromBranch(context, callback) {
     });
 }
 
+// function readExistingTagsFromBranch(context, callback) {
+//     log.debug("readExistingTagsFromBranch()");
+
+//     if (!context.includeTags) {
+//         return callback(null, context);
+//     }
+
+//     var query = {
+//         _type: "n:tag"
+//     };
+
+//     context.branch.queryNodes(query, {
+//         limit: -1
+//     }).each(function () {
+//         var node = this;
+//         util.enhanceNode(node);
+//         context.existingTagNodes[node.tag] = node;
+//     }).then(function () {
+//         log.info("Existing tag count: " + Object.keys(context.existingTagNodes).length);
+//         callback(null, context);
+//     });
+// }
+
 function readExistingContentInstancesFromBranch(context, callback) {
     log.debug("readExistingContentInstancesFromBranch()");
 
@@ -689,7 +736,11 @@ function loadAllDefinitionsFromDisk(context, callback) {
     if (files && Gitana.isArray(files)) {
         for (var i = 0; i < files.length; i++) {
             var jsonNode = loadJsonFile.sync(files[i]);
-            // jsonNode.___localSourcePath = files[i];
+            if (!!jsonNode.systemBootstrapped && !context.overwriteSystemDefinitions) {
+                // don't overwrite system types
+                continue;
+            }
+
             context.localTypeDefinitions[jsonNode._qname] = jsonNode;
         }
 
@@ -868,6 +919,9 @@ function loadContentInstancesFromDisk(context, callback) {
         if (files && Gitana.isArray(files)) {
             for (var j = 0; j < files.length; j++) {
                 var jsonNode = loadJsonFile.sync(files[j]);
+                delete jsonNode._doc;
+                delete jsonNode._source_doc;
+                // delete jsonNode._qname;        
                 context.instanceNodes.push(jsonNode);
                 context.instanceQnames.push(jsonNode._qname);
             }
@@ -1095,8 +1149,7 @@ function writeAttachmentsToBranch(context, callback) {
     log.debug("writeAttachmentsToBranch()");
 
     if (context.onlyTranslations) {
-        callback(null, context);
-        return;
+        return callback(null, context);
     }
 
     var nodes = context.instanceNodes.concat(context.relatedNodes);
@@ -1106,6 +1159,10 @@ function writeAttachmentsToBranch(context, callback) {
     }
 
     async.each(nodes, function (node, callback) {
+        if (!node.attachments && !Object.keys(node.attachments || {}).length) {
+            return callback(null, context);
+        }
+
         async.each(Object.keys(node.attachments || {}), function (attachment, callback) {
             log.debug("adding attachment " + attachment.attachmentId + " to " + node._doc);
 
@@ -1124,6 +1181,8 @@ function writeAttachmentsToBranch(context, callback) {
             return callback(err, context);
         });
     });
+
+    return callback(null, context);
 }
 
 function writeRelatedNodesToBranch(nodes, context, callback) {
@@ -1144,7 +1203,7 @@ function writeRelatedNodesToBranch(nodes, context, callback) {
 }
 
 function writeNodesToBranch(nodes, context, callback) {
-    log.info("writeNodesToBranch()");
+    log.debug("writeNodesToBranch()");
 
     if (context.includeTranslations && context.onlyTranslations) {
         callback(null, context);
@@ -1255,13 +1314,11 @@ function writeInstanceNodesToBranch(context, callback) {
     async.eachSeries(context.instanceNodes, async.apply(writeInstanceNodeToBranch, context), function (err) {
         if (err) {
             log.error(chalk.red("Error: " + err));
-            callback(err);
-            return;
+            return callback(err, context);
         }
 
         // log.debug("loaded");
-        callback(null, context);
-        return;
+        return callback(null, context);
     });
 }
 
@@ -1279,14 +1336,20 @@ function writeInstanceNodeToBranch(context, instanceNode, callback) {
 
         util.updateDocumentProperties(existingNode, instanceNode);
         existingNode.update().trap(function (err) {
-            callback("writeDefinition() " + err, context);
+            callback("writeInstanceNodeToBranch() " + err, context);
             return;
         }).then(function () {
             var node = this;
             util.enhanceNode(node);
-            log.info("Updated instance node " + node._doc + " " + node._type + " " + node.title || "");
-            callback(null, context);
-            return;
+            log.info("Updated instance node " + node._type + " " + node._doc + " " + node._qname + " " + node.title || "");
+
+            if (context.includeTags && !!instanceNode.tags && !node.__features()["f:taggable"]) {
+                node.addFeature("f:taggable").then(function(){
+                    return callback(null, context);
+                })
+            } else {
+                return callback(null, context);
+            }
         });
     }
     else {
@@ -1298,8 +1361,14 @@ function writeInstanceNodeToBranch(context, instanceNode, callback) {
         }).then(function () {
             var node = this;
             log.info("Created instance node " + node._doc);
-            callback(null, context);
-            return;
+
+            if (context.includeTags && !!instanceNode.tags && !node.__features()["f:taggable"]) {
+                node.addFeature("f:taggable").then(function(){
+                    return callback(null, context);
+                })
+            } else {
+                return callback(null, context);
+            }
         });
     }
 }
@@ -1429,7 +1498,7 @@ function writeFormsToBranch(context, callback) {
 }
 
 function writeFormToBranch(context, definitionNode, callback) {
-    if (definitionNode._type !== "d:type") {
+    if (definitionNode._type === "d:association") {
         callback(null, context);
         return;
     }
@@ -1448,6 +1517,9 @@ function writeFormToBranch(context, definitionNode, callback) {
 
     for (var i = 0; i < formKeys.length; i++) {
         var newFormNode = loadFormNodeFromDisk(context, definitionNode._qname.replace(':', SC_SEPARATOR), formKeys[i]);
+        delete newFormNode._doc;
+        delete newFormNode._source_doc;
+        delete newFormNode._qname;
         newFormNode.__formKey = formKeys[i].replace(SC_SEPARATOR, ':').replace(/\.json$/, '');
         newFormNodes.push(newFormNode);
     }
@@ -1718,7 +1790,8 @@ function getContentInstances(context, callback) {
     var typeDefinitions = context.typeDefinitions;
 
     if (!typeDefinitions || !Gitana.isArray(typeDefinitions) || !typeDefinitions.length) {
-        callback("No type defintions");
+        context.finishedEarly = true;
+        callback("No type defintions found for import", context);
         return;
     }
 
@@ -1838,6 +1911,7 @@ function cleanNode(node, qnameMod) {
 
     n._source_doc = n._doc;
     n._qname += qnameMod || "";
+    delete n.__path;
     delete n._doc;
     delete n._system;
     delete n.attachments;
@@ -1914,7 +1988,8 @@ function getDefinitionForms(context, callback) {
     var typeDefinitions = context.typeDefinitions;
 
     if (!typeDefinitions || !Gitana.isArray(typeDefinitions) || !typeDefinitions.length) {
-        callback("No type defintions");
+        context.finishedEarly = true;
+        callback("No type defintions found for import", context);
         return;
     }
 
@@ -1937,7 +2012,8 @@ function getDefinitionFormAssociations(context, callback) {
     var typeDefinitions = context.finalDefinitionNodes;
 
     if (!typeDefinitions || !Gitana.isArray(typeDefinitions) || !typeDefinitions.length) {
-        callback("No type defintions");
+        context.finishedEarly = true;
+        callback("No type defintions found for import", context);
         return;
     }
 
@@ -1987,7 +2063,7 @@ function getOptions() {
         { name: 'prompt', alias: 'p', type: Boolean, description: 'prompt for username and password. overrides gitana.json credentials' },
         { name: 'use-credentials-file', alias: 'c', type: Boolean, description: 'use credentials file ~/.cloudcms/credentials.json. overrides gitana.json credentials' },
         { name: 'gitana-file-path', alias: 'g', type: String, description: 'path to gitana.json file to use when connecting. defaults to ./gitana.json' },
-        { name: 'branch', alias: 'b', type: String, description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"' },
+        { name: 'branch', alias: 'b', type: String, description: 'branch id or branch alias (not branch name!) to write content to. branch id or "master". Default is "master"' },
         { name: 'list-types', alias: 'l', type: Boolean, description: 'list type definitions available in the branch' },
         { name: 'definition-qname', alias: 'q', type: String, multiple: true, description: '_qname of the type definition' },
         { name: 'all-definitions', alias: 'a', type: Boolean, description: 'import all locally defined definitions. Or use --definition-qname' },
@@ -1995,9 +2071,12 @@ function getOptions() {
         { name: 'nodes', alias: 'n', type: Boolean, description: 'instead of importing definitions, import nodes in the nodes folder (and, optionally, their related nodes)' },
         { name: 'include-related', alias: 'r', type: Boolean, description: 'include instance records referred to in relators on instance records' },
         { name: 'include-translations', type: Boolean, description: 'include translation records' },
+        { name: 'include-tags', type: Boolean, description: 'include tags for instances and other nodes which include a \'tags[]\' array. Creates tag nodes if necessary' },
+        { name: 'use-tracing-feature', type: Boolean, description: 'install and use a feature (util:import-tracable) to store information about the node\'s import operation. This can help trace a node back to it\'s source node for previous imports' },
         { name: 'only-translations', type: Boolean, description: 'include only translation records and not the master node itself. Use this to sync with third party created translations' },
         { name: 'overwrite-existing-translations', type: Boolean, description: 'when importing translations with --include-translations, existing records will not be overwritten by default. This setting will also overwrite existing records' },
         { name: 'skip-definition-validation', alias: 'k', type: Boolean, description: 'do not perform dependency checks when using --all-definitions to import definitions' },
+        { name: 'overwrite-system-definitions', type: Boolean, description: 'overwrite system defined types (systemBootstrapped: true)' },
         { name: 'overwrite-instances', alias: 'o', type: Boolean, description: 'overwrite instance records. by default only missing records will be created. this will cause existing records to be updated as well' },
         { name: 'folder-path', alias: 'f', type: String, description: 'folder to store exported files. defaults to ./data' }
     ];
