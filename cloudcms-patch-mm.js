@@ -27,7 +27,7 @@ const isWindows = /^win/.test(process.platform);
 const pathResolve = isWindows ? path.resolve : path.posix.resolve;
 
 // debug feature. only use when using charles proxy ssl proxy for intercepting cloud cms api calls:
-if (process.env.NODE_ENV === "development") {
+if (process.env.NODE_ENV === "dev" || process.env.NODE_ENV === "development") {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
 

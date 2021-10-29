@@ -33,6 +33,7 @@ var option_useCredentialsFile = options["use-credentials-file"];
 var option_gitanaFilePath = options["gitana-file-path"] || "./gitana.json";
 var option_branchId = options["branch"] || "master";
 var option_queryFilePath = path.join(process.env.PWD, options["query-file-path"]);
+var option_removeFeature = options["remove-feature-qname"];
 var option_deleteDupQNames = options["delete-dup-qnames"];
 var option_repositoryId = options["repository"];
 var option_userName = options["username"];
@@ -102,12 +103,14 @@ function handleTouch() {
             password: option_password,
             queryFilePath: option_queryFilePath,
             query: require(option_queryFilePath),
-            nodes: []
+            nodes: [],
+            removeFeature: option_removeFeature
         };
         
         async.waterfall([
             async.ensureAsync(async.apply(handleDupQNames, context)),
             async.ensureAsync(getNodesFromQuery),
+            async.ensureAsync(removeFeatureFromNodes),
             async.ensureAsync(touchNodes)
         ], function (err, context) {
             if (err)
@@ -170,6 +173,39 @@ function getNodesFromQuery(context, callback) {
     });
 }
 
+function removeFeatureFromNodes(context, callback) {
+    log.info("removeFeatureFromNodes()");
+
+    var nodes = context.nodes;
+    var removeFeature = context.removeFeature || null;
+
+    if (!removeFeature) {
+        return callback();
+    }
+
+    async.eachSeries(nodes, function(node, cb) {
+        log.info("Removing Feature " + node._doc);
+        
+        Chain(node).trap(function(err) {
+            log.warn("warning: " + JSON.stringify(err));
+            cb();
+        }).removeFeature(removeFeature).then(function() {            
+            cb();
+        });
+    }, function (err) {
+        if(err)
+        {
+            log.error("error: " + err);
+            callback(err);
+            return;
+        }
+        
+        log.debug("remove feature complete");
+        callback(null, context);
+        return;
+    });        
+}
+
 function touchNodes(context, callback) {
     log.info("touchNodes()");
 
@@ -208,9 +244,10 @@ function getOptions() {
         {name: 'branch',                alias: 'b', type: String, description: 'branch id (not branch name!) to write content to. branch id or "master". Default is "master"'},
         {name: 'query-file-path',       alias: 'y', type: String, description: 'path to a json file defining the query'},
         // {name: 'delete-dup-qnames',     alias: 'd', type: Boolean, multiple: true, description: 'direct call to the api server to clean up duplicate qnames before touching nodes. requires --qname --branch (even if master) and --repository options.'},
+        {name: 'remove-feature-qname',  alias: 'm', type: String, description: 'qname of feature to remove before touch. ex.: \"f:thumbnailable\"'},
         {name: 'repository',            alias: 'r', type: String, description: 'repository id where duplicate qnames will be repaired"'},
-        {name: 'username',            alias: 'u', type: String, description: 'api server admin user name"'},
-        {name: 'password',            alias: 'w', type: String, description: 'api server admin password"'},
+        {name: 'username',              alias: 'u', type: String, description: 'api server admin user name"'},
+        {name: 'password',              alias: 'w', type: String, description: 'api server admin password"'},
     ];
 }
 

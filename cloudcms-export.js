@@ -21,7 +21,7 @@ const log = new Logger({
 const SC_SEPARATOR = "__";
 
 // debug only when using charles proxy ssl proxy when intercepting cloudcms api calls:
-if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV === "dev" || process.env.NODE_ENV === "development") {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
 
@@ -45,6 +45,7 @@ var option_allDefinitions = options["all-definitions"] || false;
 var option_includeInstances = options["include-instances"] || false;
 var option_includeRelated = options["include-related"] || false;
 var option_includeTranslations = options["include-translations"] || false;
+// var option_includeTags = options["include-tags"] || false;
 var option_dataFolderPath = options["folder-path"] || "./data";
 var option_queryFilePath = options["query-file-path"];
 var option_traverse = options["traverse"];
@@ -172,17 +173,17 @@ function handleExport() {
         };
 
         async.waterfall([
-        async.apply(getDefinitions, context),
-        async.ensureAsync(getDefinitionFormAssociations),
-        async.ensureAsync(getDefinitionForms),
-        async.ensureAsync(writeDefinitionJSONtoDisk),
-        async.ensureAsync(getContentInstances),
-        async.ensureAsync(async.apply(getRelated, context.instanceNodes)),
-        async.ensureAsync(async.apply(getTranslations, context.instanceNodes)),
-        async.ensureAsync(async.apply(downloadAttachments, context.instanceNodes, "instances")),
-        async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
-        async.ensureAsync(async.apply(downloadAttachments, context.translationNodes, "translations")),
-        async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.instanceNodes, "instances"))
+            async.apply(getDefinitions, context),
+            async.ensureAsync(getDefinitionFormAssociations),
+            async.ensureAsync(getDefinitionForms),
+            async.ensureAsync(writeDefinitionJSONtoDisk),
+            async.ensureAsync(getContentInstances),
+            async.ensureAsync(async.apply(getRelated, context.instanceNodes)),
+            async.ensureAsync(async.apply(getTranslations, context.instanceNodes)),
+            async.ensureAsync(async.apply(downloadAttachments, context.instanceNodes, "instances")),
+            async.ensureAsync(async.apply(downloadAttachments, context.relatedNodes, "related")),
+            async.ensureAsync(async.apply(downloadAttachments, context.translationNodes, "translations")),
+            async.ensureAsync(async.apply(writeContentInstanceJSONtoDisk, context.instanceNodes, "instances"))
         ], function (err, context) {
             if (err) {
                 log.error("Error exporting: " + err);
@@ -541,7 +542,7 @@ function getDefinitionInstances(context, typeDefinitionNode, callback) {
         context.instanceNodes[typeDefinitionNode._qname].push(instance);
     }).then(function () {
         // log.debug("instances: " + JSON.stringify(context.instanceNodes, null, 2));
-        log.debug("instances count: " + context.instanceNodes.length);
+        log.debug("instances count: " + context.instanceNodes[typeDefinitionNode._qname].length);
         callback(null, context);
     });
 }
@@ -854,6 +855,11 @@ function getOptions() {
             type: Boolean,
             description: 'include translation records of selected nodes'
         },
+        // {
+        //     name: 'include-tags',
+        //     type: Boolean,
+        //     description: 'include tags for instances and nodes'
+        // },
         {
             name: 'folder-path',
             alias: 'f',
