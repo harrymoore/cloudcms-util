@@ -270,7 +270,7 @@ function getNodesFromTraverseQuery(context, callback) {
 function downloadAttachments(nodes, pathPart, context, callback) {
     log.debug("downloadAttachments() " + pathPart);
 
-    if (!nodes.length) {
+    if (!_.keys(nodes).length) {
         callback(null, context);
         return;
     }
@@ -575,7 +575,7 @@ function handleListTypes() {
                 console.log("type: " + context.typeDefinitions[type]._type + "\t_qname: " + context.typeDefinitions[type]._qname + "\tTitle: \"" + context.typeDefinitions[type].title + "\"");
             });
 
-            console.log("\ndone");
+            // console.log("\ndone");
         });
     });
 }
