@@ -22,6 +22,11 @@ if (script === "patch") {
     const Command = require('../Patch');
     let cmd = new Command();
     cmd.exec();
+    return;   
+} else if (script === "FindMissingChangesets") {
+    const Command = require('../FindMissingChangesets');
+    let cmd = new Command();
+    cmd.exec();
     return;
 } else if (script === "report-multiple-parents") {
     const Command = require('../ReportMultipleParents');
@@ -76,6 +81,9 @@ if (script === "patch") {
 } else if (script === "touch") {
     require('../cloudcms-touch');
     return;
+} else if (script === "create-search-indexes") {
+    createSearchIndexes(handleOptions(script));
+    return;
 } else if (script === "-h" || script === "--help") {
     printHelp(handleOptions(script));
     return;
@@ -87,6 +95,102 @@ if (script === "patch") {
 
 function printHelp() {
     console.log(chalk.blue("Supported commands are: ") + chalk.green("\n\tinit\n\timport\n\texport\n\texport-users\n\timport-users\n\tcreate-definition\n\tcreate-form-fields\n\tcreate-node\n\tcreate-instance-node\n\tpatch-nodes\n\tdelete-nodes\n\tlist-versions\n\tpublish"));
+}
+  
+function createSearchIndexes(options) {
+    var allProjects = options['all-projects'] || false;
+    const { spawn, spawnSync} = require('child_process');
+    // const {onExit} = require('@rauschma/stringio');
+
+    
+    const child = spawnSync('cloudcms', ['platform', 'list-repositories', '--limit', '500'], { encoding: 'utf-8' });
+    console.log(child.stdout); // will print ls results only on completion
+    
+    // const child = spawn('cloudcms', ['platform', 'list-repositories', '--limit', '500'], {
+    //     // stdio: [process.stdin, process.stdout, process.stderr]
+    // });
+
+    // await onExit(child);
+
+    // const child = spawnSync('cloudcms', ['platform', 'list-repositories', '--limit', '500', '--pretty']);
+    console.log(child.stdout.toString());
+    console.log(JSON.parse(child.stdout.toString()).total_rows);
+    // console.log(JSON.parse(child.stdout));
+
+    // async function main() {
+    //     const filePath = process.argv[2];
+    //     console.log('INPUT: '+filePath);
+      
+    //     const source = spawn('cat', [filePath],
+    //       {stdio: ['ignore', 'pipe', process.stderr]}); // (A)
+      
+    //     await echoReadable(source.stdout); // (B)
+      
+    //     console.log('### DONE');
+    //   }
+    //   main();
+      
+    //   async function echoReadable(readable) {
+    //     for await (const line of chunksToLinesAsync(readable)) { // (C)
+    //       console.log('LINE: '+chomp(line))
+    //     }
+    //   }
+    
+
+    // const child = spawn('cloudcms', ['platform', 'list-repositories', '--limit', '1000']);
+    // console.log(child.stdout.toString);
+
+    // var command = require('child_process').spawn('./command.js');
+
+    // let stdout = "";
+
+    // child.stdout.on('data', function (data) {
+    //     console.log("stdout data: ".green + data);
+    //     stdout += data;
+    //     if (prompt_re.test(stdout)) {
+    //         command.stdin.write("yes\n");
+    //         // Flush the current buffer.
+    //         stdout = "";
+    //     }
+    // });
+
+    // child.stdout.on('error', function (err) {
+    //     console.log('stdout error: '.red, err);
+    // });
+    
+    // var exit_msg = 'Exited with code... ';
+    // child.on('exit', function (code) {
+    //     if (code != 0) {
+    //         console.log(exit_msg.red, code);
+    //         process.exit(1); // Or whatever you want to handle errors.
+    //     }
+    
+    //     console.log(exit_msg.green, code);
+    //     // The code you want to execute once your command is done goes here.
+    // });
+
+    
+    // const { execSync } = require('child_process');
+
+    // let results = child.stdout.toString();
+    // let o = JSON.parse(results);
+    // console.log(JSON.stringify(results, null, 2));
+    // results.rows.forEach(row => console.log(row._doc));
+    
+    // let o = JSON.parse(stdout);
+
+    
+    
+    // command.stdout.on('data', function (data) {
+    //     console.log("stdout data: ".green + data);
+    //     stdout += data;
+    //     if (prompt_re.test(stdout)) {
+    //         command.stdin.write("yes\n");
+    //         // Flush the current buffer.
+    //         stdout = "";
+    //     }
+    // });
+    
 }
 
 function init(options) {
@@ -379,6 +483,14 @@ function handleOptions(command) {
             description: 'identifier for a node. must be unique from other nodes in the data/nodes or data/instances folder'
         }
     ];
+
+    if (command === 'create-search-indexes') {
+        options.push({
+            name: 'all-projects',
+            type: Boolean,
+            description: 'Create search indexes for all branches on all project content repositories'
+        });
+    }
 
     if (command === 'create-form-fields') {
         options.push({
