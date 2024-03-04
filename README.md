@@ -147,7 +147,7 @@ Users require a password. If the PASSWORD column is empty for any user then the 
 The CSV file is required to have a header as the first row. The headers should be: NAME,EMAIL,FIRST,LAST,COMPANY,PASSWORD. The header text does not actually matter. The first column is expeced to me NAME, the second column EMAIL, etc.
 Example: 
 NAME,EMAIL,FIRST,LAST,COMPANY,PASSWORD
-mary,mary.user1@email.com,Marry,User1,this company,
+mary,mary.user1@email.com,Mary,User1,this company,
 edith,edith.m.user2@anotheremail.com,Edith,User2,,Hello$World.1
 
 ## Apply bulk property updates
